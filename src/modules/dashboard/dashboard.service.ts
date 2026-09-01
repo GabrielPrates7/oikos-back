@@ -1,17 +1,7 @@
+import { currentMonthString, monthRange } from '../../utils/date-range.js'
 import { accountsRepository } from '../accounts/accounts.repository.js'
 import { creditCardsRepository } from '../credit-cards/credit-cards.repository.js'
 import { dashboardRepository } from './dashboard.repository.js'
-
-function currentMonthString(): string {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  return `${year}-${month}`
-}
-
-function lastDayOfMonth(year: number, month: number): number {
-  return new Date(year, month, 0).getDate()
-}
 
 function resolveMonthRange(month?: string): {
   month: string
@@ -19,13 +9,7 @@ function resolveMonthRange(month?: string): {
   monthEnd: string
 } {
   const resolvedMonth = month ?? currentMonthString()
-  const [yearStr, monthStr] = resolvedMonth.split('-')
-  const year = Number(yearStr)
-  const monthNum = Number(monthStr)
-
-  const monthStart = `${yearStr}-${monthStr}-01`
-  const monthEnd = `${yearStr}-${monthStr}-${String(lastDayOfMonth(year, monthNum)).padStart(2, '0')}`
-
+  const { monthStart, monthEnd } = monthRange(resolvedMonth)
   return { month: resolvedMonth, monthStart, monthEnd }
 }
 
@@ -108,10 +92,11 @@ export const dashboardService = {
       }),
     )
 
-    const expensesByCategoryRows = await dashboardRepository.getExpensesByCategory(
+    const expensesByCategoryRows = await dashboardRepository.getCategoryBreakdown(
       userId,
       monthStart,
       monthEnd,
+      'expense',
     )
     const expensesByCategory: CategoryExpenseSummary[] = expensesByCategoryRows.map((row) => ({
       categoryId: row.category_id,
@@ -121,9 +106,24 @@ export const dashboardService = {
     }))
 
     const [recentIncome, recentExpenses, recentTransfers] = await Promise.all([
-      dashboardRepository.getRecentIncomeEntries(userId, monthStart, monthEnd, RECENT_TRANSACTIONS_PER_TYPE),
-      dashboardRepository.getRecentExpenses(userId, monthStart, monthEnd, RECENT_TRANSACTIONS_PER_TYPE),
-      dashboardRepository.getRecentTransfers(userId, monthStart, monthEnd, RECENT_TRANSACTIONS_PER_TYPE),
+      dashboardRepository.getRecentIncomeEntries(
+        userId,
+        monthStart,
+        monthEnd,
+        RECENT_TRANSACTIONS_PER_TYPE,
+      ),
+      dashboardRepository.getRecentExpenses(
+        userId,
+        monthStart,
+        monthEnd,
+        RECENT_TRANSACTIONS_PER_TYPE,
+      ),
+      dashboardRepository.getRecentTransfers(
+        userId,
+        monthStart,
+        monthEnd,
+        RECENT_TRANSACTIONS_PER_TYPE,
+      ),
     ])
 
     const normalized: RecentTransaction[] = [

@@ -1,11 +1,20 @@
 import { pool } from '../../config/database.js'
 import type {
-  CategoryExpenseTotalRow,
+  CategoryBreakdownRow,
+  CategoryBreakdownType,
   MonthlyTotals,
   RecentExpenseRow,
   RecentIncomeEntryRow,
   RecentTransferRow,
 } from './dashboard.types.js'
+
+const CATEGORY_BREAKDOWN_SOURCE: Record<
+  CategoryBreakdownType,
+  { table: string; dateColumn: string }
+> = {
+  income: { table: 'income_entries', dateColumn: 'entry_date' },
+  expense: { table: 'expenses', dateColumn: 'expense_date' },
+}
 
 export const dashboardRepository = {
   async getMonthlyTotals(
@@ -29,16 +38,21 @@ export const dashboardRepository = {
     return { incomeCents: row.income_cents, expenseCents: row.expense_cents }
   },
 
-  async getExpensesByCategory(
+  async getCategoryBreakdown(
     userId: string,
     monthStart: string,
     monthEnd: string,
-  ): Promise<CategoryExpenseTotalRow[]> {
-    const result = await pool.query<CategoryExpenseTotalRow>(
-      `SELECT c.id AS category_id, c.name, c.icon, SUM(e.amount_cents)::int AS total_cents
-       FROM expenses e
-       JOIN categories c ON c.id = e.category_id
-       WHERE e.user_id = $1 AND e.expense_date BETWEEN $2 AND $3
+    type: CategoryBreakdownType,
+  ): Promise<CategoryBreakdownRow[]> {
+    const { table, dateColumn } = CATEGORY_BREAKDOWN_SOURCE[type]
+
+    // `table`/`dateColumn` vêm de um mapa fixo interno (chaveado por um enum já validado
+    // pelo Zod no controller), nunca de input bruto do usuário — não há injeção aqui.
+    const result = await pool.query<CategoryBreakdownRow>(
+      `SELECT c.id AS category_id, c.name, c.icon, SUM(t.amount_cents)::int AS total_cents
+       FROM ${table} t
+       JOIN categories c ON c.id = t.category_id
+       WHERE t.user_id = $1 AND t.${dateColumn} BETWEEN $2 AND $3
        GROUP BY c.id, c.name, c.icon
        ORDER BY total_cents DESC`,
       [userId, monthStart, monthEnd],

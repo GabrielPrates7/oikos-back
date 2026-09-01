@@ -3,7 +3,9 @@ export interface MonthlyTotals {
   expenseCents: number
 }
 
-export interface CategoryExpenseTotalRow {
+export type CategoryBreakdownType = 'income' | 'expense'
+
+export interface CategoryBreakdownRow {
   category_id: string
   name: string
   icon: string | null
