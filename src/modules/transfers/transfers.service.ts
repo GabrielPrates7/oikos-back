@@ -1,0 +1,45 @@
+import { AppError, NotFoundError } from '../../errors/AppError.js'
+import { accountsRepository } from '../accounts/accounts.repository.js'
+import { transfersRepository } from './transfers.repository.js'
+import type { TransferFilters } from './transfers.repository.js'
+import type { CreateTransferInput } from './transfers.schema.js'
+import type { Transfer } from './transfers.types.js'
+
+async function assertAccountBelongsToUser(accountId: string, userId: string): Promise<void> {
+  const account = await accountsRepository.findByIdAndUser(accountId, userId)
+  if (!account) {
+    throw new NotFoundError('conta não encontrada')
+  }
+}
+
+export const transfersService = {
+  async create(userId: string, data: CreateTransferInput): Promise<Transfer> {
+    if (data.from_account_id === data.to_account_id) {
+      throw new AppError(400, 'conta de origem e destino não podem ser a mesma')
+    }
+
+    await assertAccountBelongsToUser(data.from_account_id, userId)
+    await assertAccountBelongsToUser(data.to_account_id, userId)
+
+    return transfersRepository.create(userId, data)
+  },
+
+  async listByUser(userId: string, filters: TransferFilters): Promise<Transfer[]> {
+    return transfersRepository.findAllByUser(userId, filters)
+  },
+
+  async getById(id: string, userId: string): Promise<Transfer> {
+    const transfer = await transfersRepository.findByIdAndUser(id, userId)
+    if (!transfer) {
+      throw new NotFoundError('transferência não encontrada')
+    }
+    return transfer
+  },
+
+  async delete(id: string, userId: string): Promise<void> {
+    const deleted = await transfersRepository.delete(id, userId)
+    if (!deleted) {
+      throw new NotFoundError('transferência não encontrada')
+    }
+  },
+}

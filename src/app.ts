@@ -8,6 +8,7 @@ import { authRoutes } from './modules/auth/auth.routes.js'
 import { categoriesRoutes } from './modules/categories/categories.routes.js'
 import { expensesRoutes } from './modules/expenses/expenses.routes.js'
 import { incomeEntriesRoutes } from './modules/income-entries/income-entries.routes.js'
+import { transfersRoutes } from './modules/transfers/transfers.routes.js'
 
 export function buildApp() {
   const app = Fastify({ logger: true })
@@ -30,6 +31,7 @@ export function buildApp() {
   app.register(categoriesRoutes, { prefix: '/api/categories' })
   app.register(incomeEntriesRoutes, { prefix: '/api/income-entries' })
   app.register(expensesRoutes, { prefix: '/api/expenses' })
+  app.register(transfersRoutes, { prefix: '/api/transfers' })
 
   return app
 }
