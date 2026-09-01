@@ -9,6 +9,7 @@ import { categoriesRoutes } from './modules/categories/categories.routes.js'
 import { creditCardsRoutes } from './modules/credit-cards/credit-cards.routes.js'
 import { expensesRoutes } from './modules/expenses/expenses.routes.js'
 import { incomeEntriesRoutes } from './modules/income-entries/income-entries.routes.js'
+import { purchasesRoutes } from './modules/purchases/purchases.routes.js'
 import { transfersRoutes } from './modules/transfers/transfers.routes.js'
 
 export function buildApp() {
@@ -34,6 +35,7 @@ export function buildApp() {
   app.register(expensesRoutes, { prefix: '/api/expenses' })
   app.register(transfersRoutes, { prefix: '/api/transfers' })
   app.register(creditCardsRoutes, { prefix: '/api/credit-cards' })
+  app.register(purchasesRoutes, { prefix: '/api/purchases' })
 
   return app
 }
