@@ -1,4 +1,5 @@
-import { NotFoundError } from '../../errors/AppError.js'
+import { ConflictError, NotFoundError } from '../../errors/AppError.js'
+import { isForeignKeyViolation } from '../../utils/postgres.js'
 import { categoriesRepository } from './categories.repository.js'
 import type { CreateCategoryInput, UpdateCategoryInput } from './categories.schema.js'
 import type { Category, CategoryType } from './categories.types.js'
@@ -37,7 +38,17 @@ export const categoriesService = {
     if (!owned) {
       throw new NotFoundError('categoria não encontrada')
     }
-    const deleted = await categoriesRepository.delete(id, userId)
+
+    let deleted: boolean
+    try {
+      deleted = await categoriesRepository.delete(id, userId)
+    } catch (error) {
+      if (isForeignKeyViolation(error)) {
+        throw new ConflictError('categoria em uso, não pode ser removida')
+      }
+      throw error
+    }
+
     if (!deleted) {
       throw new NotFoundError('categoria não encontrada')
     }

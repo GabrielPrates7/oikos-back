@@ -6,6 +6,7 @@ import { errorHandler } from './middlewares/errorHandler.js'
 import { accountsRoutes } from './modules/accounts/accounts.routes.js'
 import { authRoutes } from './modules/auth/auth.routes.js'
 import { categoriesRoutes } from './modules/categories/categories.routes.js'
+import { incomeEntriesRoutes } from './modules/income-entries/income-entries.routes.js'
 
 export function buildApp() {
   const app = Fastify({ logger: true })
@@ -26,6 +27,7 @@ export function buildApp() {
   app.register(authRoutes, { prefix: '/api/auth' })
   app.register(accountsRoutes, { prefix: '/api/accounts' })
   app.register(categoriesRoutes, { prefix: '/api/categories' })
+  app.register(incomeEntriesRoutes, { prefix: '/api/income-entries' })
 
   return app
 }
