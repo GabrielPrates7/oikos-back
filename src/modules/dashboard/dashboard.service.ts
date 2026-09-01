@@ -121,9 +121,9 @@ export const dashboardService = {
     }))
 
     const [recentIncome, recentExpenses, recentTransfers] = await Promise.all([
-      dashboardRepository.getRecentIncomeEntries(userId, RECENT_TRANSACTIONS_PER_TYPE),
-      dashboardRepository.getRecentExpenses(userId, RECENT_TRANSACTIONS_PER_TYPE),
-      dashboardRepository.getRecentTransfers(userId, RECENT_TRANSACTIONS_PER_TYPE),
+      dashboardRepository.getRecentIncomeEntries(userId, monthStart, monthEnd, RECENT_TRANSACTIONS_PER_TYPE),
+      dashboardRepository.getRecentExpenses(userId, monthStart, monthEnd, RECENT_TRANSACTIONS_PER_TYPE),
+      dashboardRepository.getRecentTransfers(userId, monthStart, monthEnd, RECENT_TRANSACTIONS_PER_TYPE),
     ])
 
     const normalized: RecentTransaction[] = [
