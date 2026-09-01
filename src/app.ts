@@ -6,6 +6,7 @@ import { errorHandler } from './middlewares/errorHandler.js'
 import { accountsRoutes } from './modules/accounts/accounts.routes.js'
 import { authRoutes } from './modules/auth/auth.routes.js'
 import { categoriesRoutes } from './modules/categories/categories.routes.js'
+import { creditCardsRoutes } from './modules/credit-cards/credit-cards.routes.js'
 import { expensesRoutes } from './modules/expenses/expenses.routes.js'
 import { incomeEntriesRoutes } from './modules/income-entries/income-entries.routes.js'
 import { transfersRoutes } from './modules/transfers/transfers.routes.js'
@@ -32,6 +33,7 @@ export function buildApp() {
   app.register(incomeEntriesRoutes, { prefix: '/api/income-entries' })
   app.register(expensesRoutes, { prefix: '/api/expenses' })
   app.register(transfersRoutes, { prefix: '/api/transfers' })
+  app.register(creditCardsRoutes, { prefix: '/api/credit-cards' })
 
   return app
 }
