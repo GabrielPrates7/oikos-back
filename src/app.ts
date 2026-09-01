@@ -1,11 +1,27 @@
+import fastifyCookie from '@fastify/cookie'
+import fastifyCors from '@fastify/cors'
 import Fastify from 'fastify'
+import { env } from './config/env.js'
+import { errorHandler } from './middlewares/errorHandler.js'
+import { authRoutes } from './modules/auth/auth.routes.js'
 
 export function buildApp() {
   const app = Fastify({ logger: true })
 
+  app.register(fastifyCors, {
+    origin: env.corsOrigin,
+    credentials: true,
+  })
+
+  app.register(fastifyCookie)
+
+  app.setErrorHandler(errorHandler)
+
   app.get('/health', async () => {
     return { status: 'ok' }
   })
+
+  app.register(authRoutes, { prefix: '/api/auth' })
 
   return app
 }
