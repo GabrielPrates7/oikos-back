@@ -1,10 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
-import {
-  createIncomeEntrySchema,
-  isoDateSchema,
-  updateIncomeEntrySchema,
-} from './income-entries.schema.js'
+import { isoDateSchema } from '../../utils/validation.js'
+import { createIncomeEntrySchema, updateIncomeEntrySchema } from './income-entries.schema.js'
 import { incomeEntriesService } from './income-entries.service.js'
 
 const listQuerySchema = z.object({
