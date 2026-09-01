@@ -3,6 +3,7 @@ import fastifyCors from '@fastify/cors'
 import Fastify from 'fastify'
 import { env } from './config/env.js'
 import { errorHandler } from './middlewares/errorHandler.js'
+import { accountsRoutes } from './modules/accounts/accounts.routes.js'
 import { authRoutes } from './modules/auth/auth.routes.js'
 
 export function buildApp() {
@@ -22,6 +23,7 @@ export function buildApp() {
   })
 
   app.register(authRoutes, { prefix: '/api/auth' })
+  app.register(accountsRoutes, { prefix: '/api/accounts' })
 
   return app
 }
