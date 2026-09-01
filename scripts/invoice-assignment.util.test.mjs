@@ -99,11 +99,17 @@ assert(
     JSON.stringify(amounts) === JSON.stringify([333, 333, 334]),
     `splitInstallmentAmounts(1000,3) = [333,333,334] (veio ${JSON.stringify(amounts)})`,
   )
-  assert(amounts.reduce((a, b) => a + b, 0) === 1000, 'splitInstallmentAmounts(1000,3): soma bate com o total')
+  assert(
+    amounts.reduce((a, b) => a + b, 0) === 1000,
+    'splitInstallmentAmounts(1000,3): soma bate com o total',
+  )
 }
 {
   const amounts = splitInstallmentAmounts(100000, 1)
-  assert(JSON.stringify(amounts) === JSON.stringify([100000]), 'splitInstallmentAmounts(100000,1) = [100000] (à vista)')
+  assert(
+    JSON.stringify(amounts) === JSON.stringify([100000]),
+    'splitInstallmentAmounts(100000,1) = [100000] (à vista)',
+  )
 }
 {
   const amounts = splitInstallmentAmounts(10, 3)

@@ -4,11 +4,22 @@
 //          como em income_entries.category_id/account_id — é o código real observado aqui)
 const REFERENTIAL_INTEGRITY_VIOLATION_CODES = new Set(['23503', '23001'])
 
+// 23505 = unique_violation (ex: invoice_payments.invoice_id UNIQUE — segunda tentativa de
+// pagar a mesma fatura vira erro de constraint, tratado como 409 no service).
+const UNIQUE_VIOLATION_CODE = '23505'
+
+function pgErrorCode(error: unknown): string | undefined {
+  if (typeof error === 'object' && error !== null && 'code' in error) {
+    return (error as { code?: unknown }).code as string
+  }
+  return undefined
+}
+
 export function isForeignKeyViolation(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    REFERENTIAL_INTEGRITY_VIOLATION_CODES.has((error as { code?: unknown }).code as string)
-  )
+  const code = pgErrorCode(error)
+  return code !== undefined && REFERENTIAL_INTEGRITY_VIOLATION_CODES.has(code)
+}
+
+export function isUniqueViolation(error: unknown): boolean {
+  return pgErrorCode(error) === UNIQUE_VIOLATION_CODE
 }

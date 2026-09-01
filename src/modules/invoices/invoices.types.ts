@@ -10,3 +10,9 @@ export interface Invoice {
   created_at: Date
   updated_at: Date
 }
+
+export interface InvoiceItem {
+  installment_number: number
+  amount_cents: number
+  description: string
+}

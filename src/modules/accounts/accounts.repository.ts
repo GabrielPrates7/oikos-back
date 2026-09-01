@@ -80,38 +80,27 @@ export const accountsRepository = {
   },
 
   async getBalance(id: string, userId: string): Promise<{ balanceCents: number } | null> {
-    // Fase 5: só a tabela accounts existe, então o saldo é apenas o ponto de partida
-    // (initial_balance_cents). A partir das Fases 7-9, quando income_entries, expenses,
-    // transfers e invoice_payments existirem, esta query passa a implementar o modelo de
-    // razão contábil da seção 5.2 do documento técnico:
-    //
-    // SELECT
-    //   a.initial_balance_cents
-    //   + COALESCE(SUM(DISTINCT ie.amount_cents), 0)   -- income_entries.account_id = a.id
-    //   - COALESCE(SUM(DISTINCT e.amount_cents), 0)    -- expenses.account_id = a.id
-    //   - COALESCE(SUM(DISTINCT t_out.amount_cents), 0) -- transfers.from_account_id = a.id
-    //   + COALESCE(SUM(DISTINCT t_in.amount_cents), 0)  -- transfers.to_account_id = a.id
-    //   - COALESCE(SUM(DISTINCT ip.amount_cents), 0)   -- invoice_payments.account_id = a.id
-    //   AS balance_cents
-    // FROM accounts a
-    // LEFT JOIN income_entries ie ON ie.account_id = a.id
-    // LEFT JOIN expenses e ON e.account_id = a.id
-    // LEFT JOIN transfers t_out ON t_out.from_account_id = a.id
-    // LEFT JOIN transfers t_in ON t_in.to_account_id = a.id
-    // LEFT JOIN invoice_payments ip ON ip.account_id = a.id
-    // WHERE a.id = $1 AND a.user_id = $2
-    // GROUP BY a.id
-    //
-    // (os LEFT JOINs em paralelo multiplicam linhas; a versão real usará subqueries
-    // agregadas em vez de SUM(DISTINCT ...) quando essas tabelas existirem.)
-    const result = await pool.query<{ initial_balance_cents: number }>(
-      'SELECT initial_balance_cents FROM accounts WHERE id = $1 AND user_id = $2',
+    // Fórmula completa da seção 5.2 do documento técnico (modelo de razão contábil).
+    // Subqueries agregadas (não LEFT JOIN em paralelo) pra não multiplicar linhas.
+    // O filtro por a.user_id = $2 já confirma posse antes de calcular.
+    const result = await pool.query<{ balance_cents: number }>(
+      `SELECT
+         (
+           a.initial_balance_cents
+           + COALESCE((SELECT SUM(amount_cents) FROM income_entries WHERE account_id = a.id), 0)
+           - COALESCE((SELECT SUM(amount_cents) FROM expenses WHERE account_id = a.id), 0)
+           - COALESCE((SELECT SUM(amount_cents) FROM transfers WHERE from_account_id = a.id), 0)
+           + COALESCE((SELECT SUM(amount_cents) FROM transfers WHERE to_account_id = a.id), 0)
+           - COALESCE((SELECT SUM(amount_cents) FROM invoice_payments WHERE account_id = a.id), 0)
+         )::int AS balance_cents
+       FROM accounts a
+       WHERE a.id = $1 AND a.user_id = $2`,
       [id, userId],
     )
     const row = result.rows[0]
     if (!row) {
       return null
     }
-    return { balanceCents: row.initial_balance_cents }
+    return { balanceCents: row.balance_cents }
   },
 }

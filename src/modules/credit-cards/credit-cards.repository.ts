@@ -78,26 +78,28 @@ export const creditCardsRepository = {
     id: string,
     userId: string,
   ): Promise<{ availableLimitCents: number } | null> {
-    // Fase 10: só a tabela credit_cards existe, então o limite utilizado é sempre 0.
-    // A partir das Fases 11-12 (purchases, installments, invoices), esta query passa a
-    // implementar a fórmula da seção 5.3 do documento técnico:
-    //
-    // SELECT
-    //   cc.credit_limit_cents
-    //   - COALESCE(SUM(i.amount_cents), 0) AS available_limit_cents
-    // FROM credit_cards cc
-    // LEFT JOIN invoices inv ON inv.credit_card_id = cc.id AND inv.status != 'paid'
-    // LEFT JOIN installments i ON i.invoice_id = inv.id
-    // WHERE cc.id = $1 AND cc.user_id = $2
-    // GROUP BY cc.id
-    const result = await pool.query<{ credit_limit_cents: number }>(
-      'SELECT credit_limit_cents FROM credit_cards WHERE id = $1 AND user_id = $2',
+    // Fórmula completa da seção 5.3 do documento técnico. Subquery agregada (não LEFT JOIN
+    // em paralelo) pra não multiplicar linhas. O filtro por cc.user_id = $2 já confirma
+    // posse antes de calcular.
+    const result = await pool.query<{ available_limit_cents: number }>(
+      `SELECT
+         (
+           cc.credit_limit_cents
+           - COALESCE((
+               SELECT SUM(i.amount_cents)
+               FROM installments i
+               JOIN invoices inv ON inv.id = i.invoice_id
+               WHERE inv.credit_card_id = cc.id AND inv.status != 'paid'
+             ), 0)
+         )::int AS available_limit_cents
+       FROM credit_cards cc
+       WHERE cc.id = $1 AND cc.user_id = $2`,
       [id, userId],
     )
     const row = result.rows[0]
     if (!row) {
       return null
     }
-    return { availableLimitCents: row.credit_limit_cents }
+    return { availableLimitCents: row.available_limit_cents }
   },
 }

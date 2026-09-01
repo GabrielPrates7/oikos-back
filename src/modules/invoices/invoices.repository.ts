@@ -1,10 +1,9 @@
 import type { PoolClient } from 'pg'
-import type { Invoice } from './invoices.types.js'
+import { pool } from '../../config/database.js'
+import type { Invoice, InvoiceItem } from './invoices.types.js'
 
-// Fase 11: só o necessário pra criação de compra (busca fatura existente / cria se não
-// existir), sempre dentro da transação de purchases.service. CRUD completo (fechamento,
-// pagamento, listagem) e as rotas /api/invoices são Fase 12.
 export const invoicesRepository = {
+  // Fase 11: usadas dentro da transação de purchases.service (find-or-create de fatura).
   async findByCardAndReferenceMonth(
     client: PoolClient,
     creditCardId: string,
@@ -26,6 +25,66 @@ export const invoicesRepository = {
        VALUES ($1, $2, $3, $4, 'open')
        RETURNING *`,
       [data.creditCardId, data.referenceMonth, data.closingDate, data.dueDate],
+    )
+    return result.rows[0]
+  },
+
+  // Fase 12: leitura/listagem — sempre confirmando posse via JOIN em credit_cards.user_id,
+  // nunca confiando em id sozinho.
+  async findAllByUser(userId: string, filters: { creditCardId?: string } = {}): Promise<Invoice[]> {
+    const conditions = ['cc.user_id = $1']
+    const values: unknown[] = [userId]
+
+    if (filters.creditCardId !== undefined) {
+      values.push(filters.creditCardId)
+      conditions.push(`i.credit_card_id = $${values.length}`)
+    }
+
+    const result = await pool.query<Invoice>(
+      `SELECT i.* FROM invoices i
+       JOIN credit_cards cc ON cc.id = i.credit_card_id
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY i.reference_month DESC`,
+      values,
+    )
+    return result.rows
+  },
+
+  async findByIdAndUser(id: string, userId: string): Promise<Invoice | null> {
+    const result = await pool.query<Invoice>(
+      `SELECT i.* FROM invoices i
+       JOIN credit_cards cc ON cc.id = i.credit_card_id
+       WHERE i.id = $1 AND cc.user_id = $2`,
+      [id, userId],
+    )
+    return result.rows[0] ?? null
+  },
+
+  async findInstallmentsWithPurchaseInfo(invoiceId: string): Promise<InvoiceItem[]> {
+    const result = await pool.query<InvoiceItem>(
+      `SELECT ins.installment_number, ins.amount_cents, p.description
+       FROM installments ins
+       JOIN purchases p ON p.id = ins.purchase_id
+       WHERE ins.invoice_id = $1
+       ORDER BY p.purchase_date, ins.installment_number`,
+      [invoiceId],
+    )
+    return result.rows
+  },
+
+  async getInvoiceTotal(invoiceId: string): Promise<number> {
+    const result = await pool.query<{ total: number }>(
+      'SELECT COALESCE(SUM(amount_cents), 0)::int AS total FROM installments WHERE invoice_id = $1',
+      [invoiceId],
+    )
+    return result.rows[0].total
+  },
+
+  // Escrita — parte da transação de invoices.service.payInvoice.
+  async markAsPaid(client: PoolClient, invoiceId: string): Promise<Invoice> {
+    const result = await client.query<Invoice>(
+      "UPDATE invoices SET status = 'paid' WHERE id = $1 RETURNING *",
+      [invoiceId],
     )
     return result.rows[0]
   },
