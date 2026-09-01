@@ -8,10 +8,17 @@ const REFRESH_COOKIE_PATH = '/api/auth'
 const REFRESH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
 
 function setRefreshCookie(reply: FastifyReply, token: string): void {
+  const isProduction = env.nodeEnv === 'production'
+
+  // Em produção, Vercel (front) e Render (back) são domínios diferentes, então o cookie
+  // precisa de sameSite: 'none' pra sobreviver a requisições cross-site — e sameSite: 'none'
+  // só é aceito por navegadores quando secure: true também está presente. Em dev, front e
+  // back rodam em localhost com portas diferentes mas mesmo site, então 'strict' basta e é
+  // mais restritivo (melhor default local).
   reply.setCookie(REFRESH_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: env.nodeEnv === 'production',
-    sameSite: 'strict',
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'strict',
     path: REFRESH_COOKIE_PATH,
     maxAge: REFRESH_COOKIE_MAX_AGE_SECONDS,
   })
