@@ -1,6 +1,11 @@
 import { pool } from '../../config/database.js'
 import type { PublicUser, User } from './users.types.js'
 
+export interface UpdateProfileData {
+  name?: string
+  email?: string
+}
+
 export const usersRepository = {
   async createUser(name: string, email: string, passwordHash: string): Promise<PublicUser> {
     const result = await pool.query<PublicUser>(
@@ -23,5 +28,34 @@ export const usersRepository = {
       [id],
     )
     return result.rows[0] ?? null
+  },
+
+  // Só pra troca de senha — nunca exponha password_hash fora desse fluxo.
+  async findByIdWithHash(id: string): Promise<User | null> {
+    const result = await pool.query<User>('SELECT * FROM users WHERE id = $1', [id])
+    return result.rows[0] ?? null
+  },
+
+  async updateProfile(id: string, data: UpdateProfileData): Promise<PublicUser | null> {
+    const entries = Object.entries(data).filter(([, value]) => value !== undefined)
+
+    if (entries.length === 0) {
+      return usersRepository.findById(id)
+    }
+
+    const fields = entries.map(([key], i) => `${key} = $${i + 1}`)
+    const values = entries.map(([, value]) => value)
+    values.push(id)
+
+    const result = await pool.query<PublicUser>(
+      `UPDATE users SET ${fields.join(', ')} WHERE id = $${entries.length + 1}
+       RETURNING id, name, email, created_at, updated_at`,
+      values,
+    )
+    return result.rows[0] ?? null
+  },
+
+  async updatePasswordHash(id: string, newHash: string): Promise<void> {
+    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [newHash, id])
   },
 }

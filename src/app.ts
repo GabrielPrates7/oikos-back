@@ -14,6 +14,7 @@ import { invoicesRoutes } from './modules/invoices/invoices.routes.js'
 import { purchasesRoutes } from './modules/purchases/purchases.routes.js'
 import { reportsRoutes } from './modules/reports/reports.routes.js'
 import { transfersRoutes } from './modules/transfers/transfers.routes.js'
+import { usersRoutes } from './modules/users/users.routes.js'
 
 export function buildApp() {
   const app = Fastify({ logger: true })
@@ -42,6 +43,7 @@ export function buildApp() {
   app.register(invoicesRoutes, { prefix: '/api/invoices' })
   app.register(dashboardRoutes, { prefix: '/api/dashboard' })
   app.register(reportsRoutes, { prefix: '/api/reports' })
+  app.register(usersRoutes, { prefix: '/api/users' })
 
   return app
 }
