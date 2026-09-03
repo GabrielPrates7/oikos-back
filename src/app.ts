@@ -22,6 +22,11 @@ export function buildApp() {
   app.register(fastifyCors, {
     origin: env.corsOrigin,
     credentials: true,
+    // @fastify/cors default é só 'GET,HEAD,POST' — sem isso, todo PUT/DELETE/PATCH da API
+    // (accounts, categories, expenses, credit-cards, users, etc.) falha no preflight de
+    // um browser real, mesmo funcionando perfeitamente via curl/Node (que não fazem
+    // preflight). Bug real encontrado testando a tela de Configurações num browser de verdade.
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
   })
 
   app.register(fastifyCookie)
