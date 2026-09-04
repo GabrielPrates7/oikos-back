@@ -1,4 +1,4 @@
-import { AppError, NotFoundError } from '../../errors/AppError.js'
+import { AppError, ConflictError, NotFoundError } from '../../errors/AppError.js'
 import { accountsRepository } from '../accounts/accounts.repository.js'
 import { transfersRepository } from './transfers.repository.js'
 import type { TransferFilters } from './transfers.repository.js'
@@ -9,6 +9,9 @@ async function assertAccountBelongsToUser(accountId: string, userId: string): Pr
   const account = await accountsRepository.findByIdAndUser(accountId, userId)
   if (!account) {
     throw new NotFoundError('conta não encontrada')
+  }
+  if (account.status === 'archived') {
+    throw new ConflictError('conta arquivada, não é possível lançar')
   }
 }
 

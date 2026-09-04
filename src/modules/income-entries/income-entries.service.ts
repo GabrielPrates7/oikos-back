@@ -1,6 +1,6 @@
 import { accountsRepository } from '../accounts/accounts.repository.js'
 import { categoriesRepository } from '../categories/categories.repository.js'
-import { AppError, NotFoundError } from '../../errors/AppError.js'
+import { AppError, ConflictError, NotFoundError } from '../../errors/AppError.js'
 import { incomeEntriesRepository } from './income-entries.repository.js'
 import type { IncomeEntryFilters } from './income-entries.repository.js'
 import type { CreateIncomeEntryInput, UpdateIncomeEntryInput } from './income-entries.schema.js'
@@ -10,6 +10,9 @@ async function assertAccountBelongsToUser(accountId: string, userId: string): Pr
   const account = await accountsRepository.findByIdAndUser(accountId, userId)
   if (!account) {
     throw new NotFoundError('conta não encontrada')
+  }
+  if (account.status === 'archived') {
+    throw new ConflictError('conta arquivada, não é possível lançar')
   }
 }
 
