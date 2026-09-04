@@ -22,6 +22,7 @@ interface AccountSummary {
 interface CreditCardSummary {
   id: string
   name: string
+  creditLimitCents: number
   availableLimitCents: number
 }
 
@@ -87,6 +88,7 @@ export const dashboardService = {
         return {
           id: card.id,
           name: card.name,
+          creditLimitCents: card.credit_limit_cents,
           availableLimitCents: limit?.availableLimitCents ?? 0,
         }
       }),
