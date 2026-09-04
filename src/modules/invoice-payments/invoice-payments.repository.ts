@@ -1,8 +1,19 @@
 import type { PoolClient } from 'pg'
+import { pool } from '../../config/database.js'
 import type { InvoicePayment } from './invoice-payments.types.js'
 
-// Só criação, sempre dentro da transação de invoices.service.payInvoice.
 export const invoicePaymentsRepository = {
+  // Leitura fora de transação — usada por invoices.service.getDetail pra mostrar
+  // data/conta do pagamento numa fatura já paga (invoice_id é UNIQUE, no máximo um).
+  async findByInvoiceId(invoiceId: string): Promise<InvoicePayment | null> {
+    const result = await pool.query<InvoicePayment>(
+      'SELECT * FROM invoice_payments WHERE invoice_id = $1',
+      [invoiceId],
+    )
+    return result.rows[0] ?? null
+  },
+
+  // Só criação, sempre dentro da transação de invoices.service.payInvoice.
   async create(
     client: PoolClient,
     data: { invoiceId: string; accountId: string; amountCents: number; paymentDate: string },

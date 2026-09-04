@@ -13,6 +13,9 @@ export interface Invoice {
 
 export interface InvoiceItem {
   installment_number: number
+  installments_count: number
   amount_cents: number
   description: string
+  category_name: string
+  category_icon: string | null
 }

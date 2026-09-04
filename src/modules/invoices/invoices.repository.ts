@@ -62,9 +62,16 @@ export const invoicesRepository = {
 
   async findInstallmentsWithPurchaseInfo(invoiceId: string): Promise<InvoiceItem[]> {
     const result = await pool.query<InvoiceItem>(
-      `SELECT ins.installment_number, ins.amount_cents, p.description
+      `SELECT
+         ins.installment_number,
+         p.installments_count,
+         ins.amount_cents,
+         p.description,
+         c.name AS category_name,
+         c.icon AS category_icon
        FROM installments ins
        JOIN purchases p ON p.id = ins.purchase_id
+       JOIN categories c ON c.id = p.category_id
        WHERE ins.invoice_id = $1
        ORDER BY p.purchase_date, ins.installment_number`,
       [invoiceId],

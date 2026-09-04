@@ -43,14 +43,22 @@ export const invoicesService = {
   async getDetail(
     id: string,
     userId: string,
-  ): Promise<InvoiceWithDisplayStatus & { items: InvoiceItem[]; totalCents: number }> {
+  ): Promise<
+    InvoiceWithDisplayStatus & {
+      items: InvoiceItem[]
+      totalCents: number
+      payment: InvoicePayment | null
+    }
+  > {
     const invoice = await invoicesRepository.findByIdAndUser(id, userId)
     if (!invoice) {
       throw new NotFoundError('fatura não encontrada')
     }
     const items = await invoicesRepository.findInstallmentsWithPurchaseInfo(id)
     const totalCents = await invoicesRepository.getInvoiceTotal(id)
-    return { ...withDisplayStatus(invoice), items, totalCents }
+    const payment =
+      invoice.status === 'paid' ? await invoicePaymentsRepository.findByInvoiceId(id) : null
+    return { ...withDisplayStatus(invoice), items, totalCents, payment }
   },
 
   async payInvoice(
