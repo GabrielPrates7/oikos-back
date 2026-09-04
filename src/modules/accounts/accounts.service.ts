@@ -40,6 +40,13 @@ export const accountsService = {
     }
   },
 
+  async activate(id: string, userId: string): Promise<void> {
+    const account = await accountsRepository.activate(id, userId)
+    if (!account) {
+      throw new NotFoundError('conta não encontrada')
+    }
+  },
+
   async getBalance(
     id: string,
     userId: string,

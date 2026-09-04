@@ -79,6 +79,14 @@ export const accountsRepository = {
     return result.rows[0] ?? null
   },
 
+  async activate(id: string, userId: string): Promise<Account | null> {
+    const result = await pool.query<Account>(
+      "UPDATE accounts SET status = 'active' WHERE id = $1 AND user_id = $2 RETURNING *",
+      [id, userId],
+    )
+    return result.rows[0] ?? null
+  },
+
   async getBalance(id: string, userId: string): Promise<{ balanceCents: number } | null> {
     // Fórmula completa da seção 5.2 do documento técnico (modelo de razão contábil).
     // Subqueries agregadas (não LEFT JOIN em paralelo) pra não multiplicar linhas.

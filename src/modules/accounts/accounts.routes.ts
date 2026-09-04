@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { authenticate } from '../../middlewares/auth.js'
-import { archive, create, getBalance, getById, list, update } from './accounts.controller.js'
+import { activate, archive, create, getBalance, getById, list, update } from './accounts.controller.js'
 
 export async function accountsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', authenticate)
@@ -10,5 +10,6 @@ export async function accountsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/:id', getById)
   app.put('/:id', update)
   app.delete('/:id', archive)
+  app.post('/:id/activate', activate)
   app.get('/:id/balance', getBalance)
 }
