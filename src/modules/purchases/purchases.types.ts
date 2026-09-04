@@ -9,3 +9,8 @@ export interface Purchase {
   purchase_date: string
   created_at: Date
 }
+
+export interface PurchaseWithCategory extends Purchase {
+  category_name: string
+  category_icon: string | null
+}

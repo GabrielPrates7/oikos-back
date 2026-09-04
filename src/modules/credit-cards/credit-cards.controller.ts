@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
+import { purchasesService } from '../purchases/purchases.service.js'
 import {
   createCreditCardSchema,
   creditCardStatusQuerySchema,
@@ -59,4 +60,10 @@ export async function getAvailableLimit(
   const { id } = idParamsSchema.parse(request.params)
   const limit = await creditCardsService.getAvailableLimit(id, request.user!.id)
   reply.send(limit)
+}
+
+export async function listPurchases(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const { id } = idParamsSchema.parse(request.params)
+  const purchases = await purchasesService.listForCard(request.user!.id, id)
+  reply.send({ purchases })
 }

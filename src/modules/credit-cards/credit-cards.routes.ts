@@ -7,6 +7,7 @@ import {
   getAvailableLimit,
   getById,
   list,
+  listPurchases,
   update,
 } from './credit-cards.controller.js'
 
@@ -20,4 +21,5 @@ export async function creditCardsRoutes(app: FastifyInstance): Promise<void> {
   app.delete('/:id', archive)
   app.post('/:id/activate', activate)
   app.get('/:id/available-limit', getAvailableLimit)
+  app.get('/:id/purchases', listPurchases)
 }

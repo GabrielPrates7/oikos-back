@@ -14,7 +14,7 @@ import {
 } from './invoice-assignment.util.js'
 import { purchasesRepository } from './purchases.repository.js'
 import type { CreatePurchaseInput } from './purchases.schema.js'
-import type { Purchase } from './purchases.types.js'
+import type { Purchase, PurchaseWithCategory } from './purchases.types.js'
 
 export interface CreatePurchaseResult {
   purchase: Purchase
@@ -101,5 +101,13 @@ export const purchasesService = {
     } finally {
       client.release()
     }
+  },
+
+  async listForCard(userId: string, creditCardId: string): Promise<PurchaseWithCategory[]> {
+    const creditCard = await creditCardsRepository.findByIdAndUser(creditCardId, userId)
+    if (!creditCard) {
+      throw new NotFoundError('cartão não encontrado')
+    }
+    return purchasesRepository.findAllByCard(creditCardId)
   },
 }
