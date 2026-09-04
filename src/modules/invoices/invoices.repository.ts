@@ -1,6 +1,6 @@
 import type { PoolClient } from 'pg'
 import { pool } from '../../config/database.js'
-import type { Invoice, InvoiceItem } from './invoices.types.js'
+import type { Invoice, InvoiceItem, InvoiceWithTotal } from './invoices.types.js'
 
 export const invoicesRepository = {
   // Fase 11: usadas dentro da transação de purchases.service (find-or-create de fatura).
@@ -30,8 +30,12 @@ export const invoicesRepository = {
   },
 
   // Fase 12: leitura/listagem — sempre confirmando posse via JOIN em credit_cards.user_id,
-  // nunca confiando em id sozinho.
-  async findAllByUser(userId: string, filters: { creditCardId?: string } = {}): Promise<Invoice[]> {
+  // nunca confiando em id sozinho. total_cents vem via subquery correlacionada (mesmo
+  // SUM de getInvoiceTotal) pra listagem não precisar de N+1 fetch por fatura.
+  async findAllByUser(
+    userId: string,
+    filters: { creditCardId?: string } = {},
+  ): Promise<InvoiceWithTotal[]> {
     const conditions = ['cc.user_id = $1']
     const values: unknown[] = [userId]
 
@@ -40,8 +44,14 @@ export const invoicesRepository = {
       conditions.push(`i.credit_card_id = $${values.length}`)
     }
 
-    const result = await pool.query<Invoice>(
-      `SELECT i.* FROM invoices i
+    const result = await pool.query<InvoiceWithTotal>(
+      `SELECT
+         i.*,
+         COALESCE(
+           (SELECT SUM(ins.amount_cents) FROM installments ins WHERE ins.invoice_id = i.id),
+           0
+         )::int AS total_cents
+       FROM invoices i
        JOIN credit_cards cc ON cc.id = i.credit_card_id
        WHERE ${conditions.join(' AND ')}
        ORDER BY i.reference_month DESC`,

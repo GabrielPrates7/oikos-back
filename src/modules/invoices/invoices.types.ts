@@ -11,6 +11,10 @@ export interface Invoice {
   updated_at: Date
 }
 
+export interface InvoiceWithTotal extends Invoice {
+  total_cents: number
+}
+
 export interface InvoiceItem {
   installment_number: number
   installments_count: number

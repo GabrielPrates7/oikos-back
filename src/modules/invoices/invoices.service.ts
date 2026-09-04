@@ -10,6 +10,10 @@ import { invoicesRepository } from './invoices.repository.js'
 import type { PayInvoiceInput } from './invoices.schema.js'
 import type { Invoice, InvoiceItem } from './invoices.types.js'
 
+export interface InvoiceListItem extends InvoiceWithDisplayStatus {
+  totalCents: number
+}
+
 function todayISODate(): string {
   const now = new Date()
   const year = now.getFullYear()
@@ -35,9 +39,12 @@ function withDisplayStatus(invoice: Invoice): InvoiceWithDisplayStatus {
 }
 
 export const invoicesService = {
-  async listForUser(userId: string, creditCardId?: string): Promise<InvoiceWithDisplayStatus[]> {
+  async listForUser(userId: string, creditCardId?: string): Promise<InvoiceListItem[]> {
     const invoices = await invoicesRepository.findAllByUser(userId, { creditCardId })
-    return invoices.map(withDisplayStatus)
+    return invoices.map(({ total_cents, ...invoice }) => ({
+      ...withDisplayStatus(invoice),
+      totalCents: total_cents,
+    }))
   },
 
   async getDetail(
