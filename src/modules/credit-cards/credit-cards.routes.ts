@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { authenticate } from '../../middlewares/auth.js'
 import {
+  activate,
   archive,
   create,
   getAvailableLimit,
@@ -17,5 +18,6 @@ export async function creditCardsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/:id', getById)
   app.put('/:id', update)
   app.delete('/:id', archive)
+  app.post('/:id/activate', activate)
   app.get('/:id/available-limit', getAvailableLimit)
 }

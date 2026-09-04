@@ -74,6 +74,14 @@ export const creditCardsRepository = {
     return result.rows[0] ?? null
   },
 
+  async activate(id: string, userId: string): Promise<CreditCard | null> {
+    const result = await pool.query<CreditCard>(
+      "UPDATE credit_cards SET status = 'active' WHERE id = $1 AND user_id = $2 RETURNING *",
+      [id, userId],
+    )
+    return result.rows[0] ?? null
+  },
+
   async getAvailableLimit(
     id: string,
     userId: string,

@@ -35,6 +35,13 @@ export const creditCardsService = {
     }
   },
 
+  async activate(id: string, userId: string): Promise<void> {
+    const creditCard = await creditCardsRepository.activate(id, userId)
+    if (!creditCard) {
+      throw new NotFoundError('cartão não encontrado')
+    }
+  },
+
   async getAvailableLimit(
     id: string,
     userId: string,
