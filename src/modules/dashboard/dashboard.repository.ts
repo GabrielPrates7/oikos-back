@@ -5,6 +5,7 @@ import type {
   MonthlyTotals,
   RecentExpenseRow,
   RecentIncomeEntryRow,
+  RecentInvoicePaymentRow,
   RecentTransferRow,
 } from './dashboard.types.js'
 
@@ -114,6 +115,27 @@ export const dashboardRepository = {
        JOIN accounts ta ON ta.id = t.to_account_id
        WHERE t.user_id = $1 AND t.transfer_date BETWEEN $2 AND $3
        ORDER BY t.transfer_date DESC, t.created_at DESC
+       LIMIT $4`,
+      [userId, monthStart, monthEnd, limit],
+    )
+    return result.rows
+  },
+
+  async getRecentInvoicePayments(
+    userId: string,
+    monthStart: string,
+    monthEnd: string,
+    limit: number,
+  ): Promise<RecentInvoicePaymentRow[]> {
+    const result = await pool.query<RecentInvoicePaymentRow>(
+      `SELECT ip.id, ip.amount_cents, ip.payment_date AS date,
+              a.name AS account_name, cc.name AS card_name
+       FROM invoice_payments ip
+       JOIN accounts a ON a.id = ip.account_id
+       JOIN invoices inv ON inv.id = ip.invoice_id
+       JOIN credit_cards cc ON cc.id = inv.credit_card_id
+       WHERE a.user_id = $1 AND ip.payment_date BETWEEN $2 AND $3
+       ORDER BY ip.payment_date DESC, ip.created_at DESC
        LIMIT $4`,
       [userId, monthStart, monthEnd, limit],
     )

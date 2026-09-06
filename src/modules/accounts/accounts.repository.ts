@@ -111,4 +111,32 @@ export const accountsRepository = {
     }
     return { balanceCents: row.balance_cents }
   },
+
+  async getBalanceAsOf(
+    id: string,
+    userId: string,
+    beforeDate: string,
+  ): Promise<{ balanceCents: number } | null> {
+    // Mesma fórmula de getBalance, só que considerando apenas lançamentos anteriores a
+    // beforeDate — usada pra calcular o saldo de abertura do extrato (accounts.service.getStatement).
+    const result = await pool.query<{ balance_cents: number }>(
+      `SELECT
+         (
+           a.initial_balance_cents
+           + COALESCE((SELECT SUM(amount_cents) FROM income_entries WHERE account_id = a.id AND entry_date < $3), 0)
+           - COALESCE((SELECT SUM(amount_cents) FROM expenses WHERE account_id = a.id AND expense_date < $3), 0)
+           - COALESCE((SELECT SUM(amount_cents) FROM transfers WHERE from_account_id = a.id AND transfer_date < $3), 0)
+           + COALESCE((SELECT SUM(amount_cents) FROM transfers WHERE to_account_id = a.id AND transfer_date < $3), 0)
+           - COALESCE((SELECT SUM(amount_cents) FROM invoice_payments WHERE account_id = a.id AND payment_date < $3), 0)
+         )::int AS balance_cents
+       FROM accounts a
+       WHERE a.id = $1 AND a.user_id = $2`,
+      [id, userId, beforeDate],
+    )
+    const row = result.rows[0]
+    if (!row) {
+      return null
+    }
+    return { balanceCents: row.balance_cents }
+  },
 }

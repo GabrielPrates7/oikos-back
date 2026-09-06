@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
+import { isoDateSchema } from '../../utils/validation.js'
 import {
   accountStatusQuerySchema,
   createAccountSchema,
@@ -13,6 +14,11 @@ const listQuerySchema = z.object({
 
 const idParamsSchema = z.object({
   id: z.string().uuid(),
+})
+
+const statementQuerySchema = z.object({
+  from: isoDateSchema.optional(),
+  to: isoDateSchema.optional(),
 })
 
 export async function list(request: FastifyRequest, reply: FastifyReply): Promise<void> {
@@ -56,4 +62,11 @@ export async function getBalance(request: FastifyRequest, reply: FastifyReply): 
   const { id } = idParamsSchema.parse(request.params)
   const balance = await accountsService.getBalance(id, request.user!.id)
   reply.send(balance)
+}
+
+export async function getStatement(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const { id } = idParamsSchema.parse(request.params)
+  const { from, to } = statementQuerySchema.parse(request.query)
+  const statement = await accountsService.getStatement(request.user!.id, id, from, to)
+  reply.send(statement)
 }

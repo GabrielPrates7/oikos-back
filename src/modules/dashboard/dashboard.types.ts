@@ -38,3 +38,11 @@ export interface RecentTransferRow {
   from_account_name: string
   to_account_name: string
 }
+
+export interface RecentInvoicePaymentRow {
+  id: string
+  amount_cents: number
+  date: string
+  account_name: string
+  card_name: string
+}
