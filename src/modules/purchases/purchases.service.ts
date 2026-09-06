@@ -21,6 +21,19 @@ export interface CreatePurchaseResult {
   installments: Installment[]
 }
 
+async function assertCategoryIsExpenseAndVisible(
+  categoryId: string,
+  userId: string,
+): Promise<void> {
+  const category = await categoriesRepository.findByIdVisibleToUser(categoryId, userId)
+  if (!category) {
+    throw new NotFoundError('categoria não encontrada')
+  }
+  if (category.type !== 'expense') {
+    throw new AppError(400, 'categoria inválida: precisa ser do tipo expense')
+  }
+}
+
 export const purchasesService = {
   async createPurchase(userId: string, data: CreatePurchaseInput): Promise<CreatePurchaseResult> {
     // Validações de posse/estado são leituras simples contra o pool compartilhado, antes
@@ -34,13 +47,7 @@ export const purchasesService = {
       throw new ConflictError('cartão arquivado')
     }
 
-    const category = await categoriesRepository.findByIdVisibleToUser(data.category_id, userId)
-    if (!category) {
-      throw new NotFoundError('categoria não encontrada')
-    }
-    if (category.type !== 'expense') {
-      throw new AppError(400, 'categoria inválida: precisa ser do tipo expense')
-    }
+    await assertCategoryIsExpenseAndVisible(data.category_id, userId)
 
     // Bug real desde a Fase 11: nunca existiu checagem de limite na criação de compra —
     // o limite disponível só era exibido, nunca aplicado como regra.
@@ -119,6 +126,10 @@ export const purchasesService = {
   },
 
   async update(id: string, userId: string, data: UpdatePurchaseInput): Promise<Purchase> {
+    if (data.category_id !== undefined) {
+      await assertCategoryIsExpenseAndVisible(data.category_id, userId)
+    }
+
     const updated = await purchasesRepository.update(id, userId, data)
     if (!updated) {
       throw new NotFoundError('compra não encontrada')

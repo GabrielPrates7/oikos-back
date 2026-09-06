@@ -12,9 +12,14 @@ export const createPurchaseSchema = z.object({
   is_fixed: z.boolean(),
 })
 
-// Só essencial/fixo são editáveis por enquanto — mudar conta/cartão/valor de uma compra já
-// faturada teria efeito em cascata sobre parcelas/faturas já geradas, fora do escopo daqui.
+// Deliberadamente SEM total_amount_cents, installments_count ou credit_card_id (mesma
+// decisão da Fase 11): mudar valor, parcelamento ou cartão de uma compra já faturada exigiria
+// recalcular parcelas/faturas já geradas, e fazer isso sem essa lógica corromperia dado
+// financeiro. Chaves fora deste schema são descartadas pelo Zod (comportamento padrão de
+// z.object, sem .strict()) — nunca aplicadas silenciosamente.
 export const updatePurchaseSchema = z.object({
+  description: z.string().min(1).optional(),
+  category_id: z.string().uuid().optional(),
   is_essential: z.boolean().optional(),
   is_fixed: z.boolean().optional(),
 })
