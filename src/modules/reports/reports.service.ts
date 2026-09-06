@@ -2,7 +2,11 @@ import { currentMonthString, monthRange } from '../../utils/date-range.js'
 import type { CategoryBreakdownType } from '../dashboard/dashboard.types.js'
 import { dashboardRepository } from '../dashboard/dashboard.repository.js'
 import { reportsRepository } from './reports.repository.js'
-import type { MonthlyEvolutionItem } from './reports.repository.js'
+import type {
+  EssentialVsSuperfluousTotals,
+  FixedVsNonFixedTotals,
+  MonthlyEvolutionItem,
+} from './reports.repository.js'
 
 function subtractMonths(month: string, count: number): string {
   const [yearStr, monthStr] = month.split('-')
@@ -44,6 +48,36 @@ interface ComparisonCategoryItem {
   month1Cents: number
   month2Cents: number
   deltaCents: number
+}
+
+interface ByAccountItem {
+  accountId: string
+  name: string
+  totalCents: number
+}
+
+interface ByAccountResult {
+  month: string
+  type: 'income' | 'expense'
+  accounts: ByAccountItem[]
+}
+
+interface ByReceiptMethodItem {
+  receiptMethod: string
+  totalCents: number
+}
+
+interface ByReceiptMethodResult {
+  month: string
+  methods: ByReceiptMethodItem[]
+}
+
+interface EssentialVsSuperfluousResult extends EssentialVsSuperfluousTotals {
+  month: string
+}
+
+interface FixedVsNonFixedResult extends FixedVsNonFixedTotals {
+  month: string
 }
 
 interface ComparisonResult {
@@ -161,5 +195,68 @@ export const reportsService = {
       },
       categories,
     }
+  },
+
+  async getByAccount(
+    userId: string,
+    month: string | undefined,
+    type: 'income' | 'expense',
+  ): Promise<ByAccountResult> {
+    const resolvedMonth = month ?? currentMonthString()
+    const { monthStart, monthEnd } = monthRange(resolvedMonth)
+
+    const rows = await reportsRepository.getTotalByAccount(userId, monthStart, monthEnd, type)
+
+    return {
+      month: resolvedMonth,
+      type,
+      accounts: rows.map((row) => ({
+        accountId: row.account_id,
+        name: row.account_name,
+        totalCents: row.total_cents,
+      })),
+    }
+  },
+
+  async getByReceiptMethod(
+    userId: string,
+    month: string | undefined,
+  ): Promise<ByReceiptMethodResult> {
+    const resolvedMonth = month ?? currentMonthString()
+    const { monthStart, monthEnd } = monthRange(resolvedMonth)
+
+    const rows = await reportsRepository.getTotalByReceiptMethod(userId, monthStart, monthEnd)
+
+    return {
+      month: resolvedMonth,
+      methods: rows.map((row) => ({
+        receiptMethod: row.receipt_method,
+        totalCents: row.total_cents,
+      })),
+    }
+  },
+
+  async getEssentialVsSuperfluous(
+    userId: string,
+    month: string | undefined,
+  ): Promise<EssentialVsSuperfluousResult> {
+    const resolvedMonth = month ?? currentMonthString()
+    const { monthStart, monthEnd } = monthRange(resolvedMonth)
+
+    const totals = await reportsRepository.getEssentialVsSuperfluous(userId, monthStart, monthEnd)
+
+    return { month: resolvedMonth, ...totals }
+  },
+
+  async getFixedVsNonFixed(
+    userId: string,
+    month: string | undefined,
+  ): Promise<FixedVsNonFixedResult> {
+    const resolvedMonth = month ?? currentMonthString()
+    const { monthStart, monthEnd } = monthRange(resolvedMonth)
+
+    const totals = await reportsRepository.getFixedVsNonFixed(userId, monthStart, monthEnd)
+
+    return { month: resolvedMonth, ...totals }
   },
 }

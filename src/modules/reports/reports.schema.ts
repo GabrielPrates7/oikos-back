@@ -15,3 +15,12 @@ export const comparisonQuerySchema = z.object({
   month1: monthSchema,
   month2: monthSchema,
 })
+
+export const byAccountQuerySchema = z.object({
+  month: monthSchema.optional(),
+  type: z.enum(['income', 'expense']).default('expense'),
+})
+
+export const monthOnlyQuerySchema = z.object({
+  month: monthSchema.optional(),
+})
