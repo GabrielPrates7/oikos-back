@@ -52,13 +52,20 @@ export const purchasesRepository = {
   },
 
   // Nível de compra só — sem parcelas/faturas, isso é histórico "o que foi comprado",
-  // não o extrato de fatura (que já existe em invoices/installments).
+  // não o extrato de fatura (que já existe em invoices/installments). payment_status:
+  // 'paid' só quando TODAS as parcelas estão em fatura paga (bool_and sobre o grupo);
+  // uma única query agregada, sem N+1 por compra. GROUP BY p.id é suficiente pra liberar
+  // p.* inteiro (dependência funcional da chave primária), sem precisar listar cada coluna.
   async findAllByCard(creditCardId: string): Promise<PurchaseWithCategory[]> {
     const result = await pool.query<PurchaseWithCategory>(
-      `SELECT p.*, c.name AS category_name, c.icon AS category_icon
+      `SELECT p.*, c.name AS category_name, c.icon AS category_icon,
+              CASE WHEN bool_and(inv.status = 'paid') THEN 'paid' ELSE 'pending' END AS payment_status
        FROM purchases p
        JOIN categories c ON c.id = p.category_id
+       LEFT JOIN installments i ON i.purchase_id = p.id
+       LEFT JOIN invoices inv ON inv.id = i.invoice_id
        WHERE p.credit_card_id = $1
+       GROUP BY p.id, c.name, c.icon
        ORDER BY p.purchase_date DESC`,
       [creditCardId],
     )

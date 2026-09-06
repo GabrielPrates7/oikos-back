@@ -12,7 +12,10 @@ export interface Purchase {
   created_at: Date
 }
 
+export type PurchasePaymentStatus = 'paid' | 'pending'
+
 export interface PurchaseWithCategory extends Purchase {
   category_name: string
   category_icon: string | null
+  payment_status: PurchasePaymentStatus
 }
