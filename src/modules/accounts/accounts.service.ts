@@ -1,4 +1,5 @@
 import { NotFoundError } from '../../errors/AppError.js'
+import { contributionsRepository } from '../goals/contributions.repository.js'
 import { expensesRepository } from '../expenses/expenses.repository.js'
 import { incomeEntriesRepository } from '../income-entries/income-entries.repository.js'
 import { invoicePaymentsRepository } from '../invoice-payments/invoice-payments.repository.js'
@@ -15,6 +16,7 @@ export type StatementEntryType =
   | 'transfer_out'
   | 'transfer_in'
   | 'invoice_payment'
+  | 'goal_contribution'
 
 export interface StatementEntry {
   id: string
@@ -48,6 +50,7 @@ const REDUCES_BALANCE: Record<StatementEntryType, boolean> = {
   transfer_out: true,
   transfer_in: false,
   invoice_payment: true,
+  goal_contribution: true,
 }
 
 export const accountsService = {
@@ -123,12 +126,17 @@ export const accountsService = {
       ? ((await accountsRepository.getBalanceAsOf(accountId, userId, from))?.balanceCents ?? 0)
       : account.initial_balance_cents
 
-    const [incomeRows, expenseRows, transferRows, invoicePaymentRows] = await Promise.all([
-      incomeEntriesRepository.findAllByUser(userId, { accountId, dateFrom: from, dateTo: to }),
-      expensesRepository.findAllByUser(userId, { accountId, dateFrom: from, dateTo: to }),
-      transfersRepository.findAllByUser(userId, { accountId, dateFrom: from, dateTo: to }),
-      invoicePaymentsRepository.findAllForAccount(accountId, userId, { dateFrom: from, dateTo: to }),
-    ])
+    const [incomeRows, expenseRows, transferRows, invoicePaymentRows, goalContributionRows] =
+      await Promise.all([
+        incomeEntriesRepository.findAllByUser(userId, { accountId, dateFrom: from, dateTo: to }),
+        expensesRepository.findAllByUser(userId, { accountId, dateFrom: from, dateTo: to }),
+        transfersRepository.findAllByUser(userId, { accountId, dateFrom: from, dateTo: to }),
+        invoicePaymentsRepository.findAllForAccount(accountId, userId, {
+          dateFrom: from,
+          dateTo: to,
+        }),
+        contributionsRepository.findAllForAccount(accountId, userId, { dateFrom: from, dateTo: to }),
+      ])
 
     const sourceEntries: StatementSourceEntry[] = [
       ...incomeRows.map(
@@ -168,6 +176,16 @@ export const accountsService = {
           id: row.id,
           type: 'invoice_payment',
           description: `Fatura ${row.card_name}`,
+          amountCents: row.amount_cents,
+          date: row.date,
+          createdAt: row.created_at,
+        }),
+      ),
+      ...goalContributionRows.map(
+        (row): StatementSourceEntry => ({
+          id: row.id,
+          type: 'goal_contribution',
+          description: `Aporte para ${row.goal_name}`,
           amountCents: row.amount_cents,
           date: row.date,
           createdAt: row.created_at,

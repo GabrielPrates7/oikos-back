@@ -5,10 +5,12 @@ import { env } from './config/env.js'
 import { errorHandler } from './middlewares/errorHandler.js'
 import { accountsRoutes } from './modules/accounts/accounts.routes.js'
 import { authRoutes } from './modules/auth/auth.routes.js'
+import { budgetsRoutes } from './modules/budgets/budgets.routes.js'
 import { categoriesRoutes } from './modules/categories/categories.routes.js'
 import { creditCardsRoutes } from './modules/credit-cards/credit-cards.routes.js'
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes.js'
 import { expensesRoutes } from './modules/expenses/expenses.routes.js'
+import { goalsRoutes } from './modules/goals/goals.routes.js'
 import { incomeEntriesRoutes } from './modules/income-entries/income-entries.routes.js'
 import { invoicesRoutes } from './modules/invoices/invoices.routes.js'
 import { purchasesRoutes } from './modules/purchases/purchases.routes.js'
@@ -49,6 +51,8 @@ export function buildApp() {
   app.register(dashboardRoutes, { prefix: '/api/dashboard' })
   app.register(reportsRoutes, { prefix: '/api/reports' })
   app.register(usersRoutes, { prefix: '/api/users' })
+  app.register(budgetsRoutes, { prefix: '/api/budgets' })
+  app.register(goalsRoutes, { prefix: '/api/goals' })
 
   return app
 }

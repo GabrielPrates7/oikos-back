@@ -33,7 +33,7 @@ interface CategoryExpenseSummary {
   totalCents: number
 }
 
-type TransactionType = 'income' | 'expense' | 'transfer' | 'invoice_payment'
+type TransactionType = 'income' | 'expense' | 'transfer' | 'invoice_payment' | 'goal_contribution'
 
 interface RecentTransaction {
   type: TransactionType
@@ -107,33 +107,44 @@ export const dashboardService = {
       totalCents: row.total_cents,
     }))
 
-    const [recentIncome, recentExpenses, recentTransfers, recentInvoicePayments] =
-      await Promise.all([
-        dashboardRepository.getRecentIncomeEntries(
-          userId,
-          monthStart,
-          monthEnd,
-          RECENT_TRANSACTIONS_PER_TYPE,
-        ),
-        dashboardRepository.getRecentExpenses(
-          userId,
-          monthStart,
-          monthEnd,
-          RECENT_TRANSACTIONS_PER_TYPE,
-        ),
-        dashboardRepository.getRecentTransfers(
-          userId,
-          monthStart,
-          monthEnd,
-          RECENT_TRANSACTIONS_PER_TYPE,
-        ),
-        dashboardRepository.getRecentInvoicePayments(
-          userId,
-          monthStart,
-          monthEnd,
-          RECENT_TRANSACTIONS_PER_TYPE,
-        ),
-      ])
+    const [
+      recentIncome,
+      recentExpenses,
+      recentTransfers,
+      recentInvoicePayments,
+      recentGoalContributions,
+    ] = await Promise.all([
+      dashboardRepository.getRecentIncomeEntries(
+        userId,
+        monthStart,
+        monthEnd,
+        RECENT_TRANSACTIONS_PER_TYPE,
+      ),
+      dashboardRepository.getRecentExpenses(
+        userId,
+        monthStart,
+        monthEnd,
+        RECENT_TRANSACTIONS_PER_TYPE,
+      ),
+      dashboardRepository.getRecentTransfers(
+        userId,
+        monthStart,
+        monthEnd,
+        RECENT_TRANSACTIONS_PER_TYPE,
+      ),
+      dashboardRepository.getRecentInvoicePayments(
+        userId,
+        monthStart,
+        monthEnd,
+        RECENT_TRANSACTIONS_PER_TYPE,
+      ),
+      dashboardRepository.getRecentGoalContributions(
+        userId,
+        monthStart,
+        monthEnd,
+        RECENT_TRANSACTIONS_PER_TYPE,
+      ),
+    ])
 
     const normalized: RecentTransaction[] = [
       ...recentIncome.map((row): RecentTransaction => ({
@@ -166,6 +177,14 @@ export const dashboardService = {
         type: 'invoice_payment',
         id: row.id,
         description: `Fatura ${row.card_name}`,
+        amountCents: row.amount_cents,
+        date: row.date,
+        accountName: row.account_name,
+      })),
+      ...recentGoalContributions.map((row): RecentTransaction => ({
+        type: 'goal_contribution',
+        id: row.id,
+        description: `Aporte para ${row.goal_name}`,
         amountCents: row.amount_cents,
         date: row.date,
         accountName: row.account_name,

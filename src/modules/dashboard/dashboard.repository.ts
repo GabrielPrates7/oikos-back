@@ -4,6 +4,7 @@ import type {
   CategoryBreakdownType,
   MonthlyTotals,
   RecentExpenseRow,
+  RecentGoalContributionRow,
   RecentIncomeEntryRow,
   RecentInvoicePaymentRow,
   RecentTransferRow,
@@ -136,6 +137,26 @@ export const dashboardRepository = {
        JOIN credit_cards cc ON cc.id = inv.credit_card_id
        WHERE a.user_id = $1 AND ip.payment_date BETWEEN $2 AND $3
        ORDER BY ip.payment_date DESC, ip.created_at DESC
+       LIMIT $4`,
+      [userId, monthStart, monthEnd, limit],
+    )
+    return result.rows
+  },
+
+  async getRecentGoalContributions(
+    userId: string,
+    monthStart: string,
+    monthEnd: string,
+    limit: number,
+  ): Promise<RecentGoalContributionRow[]> {
+    const result = await pool.query<RecentGoalContributionRow>(
+      `SELECT gc.id, gc.amount_cents, gc.contribution_date AS date,
+              a.name AS account_name, fg.name AS goal_name
+       FROM goal_contributions gc
+       JOIN accounts a ON a.id = gc.account_id
+       JOIN financial_goals fg ON fg.id = gc.goal_id
+       WHERE a.user_id = $1 AND gc.contribution_date BETWEEN $2 AND $3
+       ORDER BY gc.contribution_date DESC, gc.created_at DESC
        LIMIT $4`,
       [userId, monthStart, monthEnd, limit],
     )
