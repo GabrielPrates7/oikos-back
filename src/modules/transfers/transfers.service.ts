@@ -5,13 +5,27 @@ import type { TransferFilters } from './transfers.repository.js'
 import type { CreateTransferInput } from './transfers.schema.js'
 import type { Transfer } from './transfers.types.js'
 
-async function assertAccountBelongsToUser(accountId: string, userId: string): Promise<void> {
+async function assertAccountBelongsToUser(
+  accountId: string,
+  userId: string,
+  checkBalance: boolean,
+): Promise<void> {
   const account = await accountsRepository.findByIdAndUser(accountId, userId)
   if (!account) {
     throw new NotFoundError('conta não encontrada')
   }
   if (account.status === 'archived') {
     throw new ConflictError('conta arquivada, não é possível lançar')
+  }
+  // Só a conta de ORIGEM é checada — saldo zerado/negativo bloqueia sair dinheiro dela,
+  // mas nunca impede que uma conta RECEBA uma transferência.
+  if (checkBalance) {
+    const balance = await accountsRepository.getBalance(accountId, userId)
+    if ((balance?.balanceCents ?? 0) <= 0) {
+      throw new ConflictError(
+        'esta conta está com saldo zero ou negativo, não é possível registrar um novo lançamento',
+      )
+    }
   }
 }
 
@@ -21,8 +35,8 @@ export const transfersService = {
       throw new AppError(400, 'conta de origem e destino não podem ser a mesma')
     }
 
-    await assertAccountBelongsToUser(data.from_account_id, userId)
-    await assertAccountBelongsToUser(data.to_account_id, userId)
+    await assertAccountBelongsToUser(data.from_account_id, userId, true)
+    await assertAccountBelongsToUser(data.to_account_id, userId, false)
 
     return transfersRepository.create(userId, data)
   },

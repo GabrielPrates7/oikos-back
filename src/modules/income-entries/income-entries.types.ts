@@ -1,3 +1,5 @@
+export type ReceiptMethod = 'pix' | 'transfer' | 'cash' | 'other'
+
 export interface IncomeEntry {
   id: string
   user_id: string
@@ -6,5 +8,6 @@ export interface IncomeEntry {
   description: string
   amount_cents: number
   entry_date: string
+  receipt_method: ReceiptMethod
   created_at: Date
 }

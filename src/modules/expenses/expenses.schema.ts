@@ -10,6 +10,8 @@ export const createExpenseSchema = z.object({
   amount_cents: z.number().int().positive(),
   payment_method: paymentMethodSchema,
   expense_date: isoDateSchema,
+  is_essential: z.boolean(),
+  is_fixed: z.boolean(),
 })
 
 export const updateExpenseSchema = createExpenseSchema.partial()

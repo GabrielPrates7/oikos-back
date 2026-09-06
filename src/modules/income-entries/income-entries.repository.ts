@@ -12,8 +12,8 @@ export interface IncomeEntryFilters {
 export const incomeEntriesRepository = {
   async create(userId: string, data: CreateIncomeEntryInput): Promise<IncomeEntry> {
     const result = await pool.query<IncomeEntry>(
-      `INSERT INTO income_entries (user_id, account_id, category_id, description, amount_cents, entry_date)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO income_entries (user_id, account_id, category_id, description, amount_cents, entry_date, receipt_method)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
       [
         userId,
@@ -22,6 +22,7 @@ export const incomeEntriesRepository = {
         data.description,
         data.amount_cents,
         data.entry_date,
+        data.receipt_method,
       ],
     )
     return result.rows[0]

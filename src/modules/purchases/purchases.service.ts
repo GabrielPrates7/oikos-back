@@ -13,7 +13,7 @@ import {
   splitInstallmentAmounts,
 } from './invoice-assignment.util.js'
 import { purchasesRepository } from './purchases.repository.js'
-import type { CreatePurchaseInput } from './purchases.schema.js'
+import type { CreatePurchaseInput, UpdatePurchaseInput } from './purchases.schema.js'
 import type { Purchase, PurchaseWithCategory } from './purchases.types.js'
 
 export interface CreatePurchaseResult {
@@ -40,6 +40,13 @@ export const purchasesService = {
     }
     if (category.type !== 'expense') {
       throw new AppError(400, 'categoria inválida: precisa ser do tipo expense')
+    }
+
+    // Bug real desde a Fase 11: nunca existiu checagem de limite na criação de compra —
+    // o limite disponível só era exibido, nunca aplicado como regra.
+    const limit = await creditCardsRepository.getAvailableLimit(data.credit_card_id, userId)
+    if (limit && data.total_amount_cents > limit.availableLimitCents) {
+      throw new ConflictError('esta compra ultrapassa o limite disponível do cartão')
     }
 
     const installmentAmounts = splitInstallmentAmounts(
@@ -109,5 +116,13 @@ export const purchasesService = {
       throw new NotFoundError('cartão não encontrado')
     }
     return purchasesRepository.findAllByCard(creditCardId)
+  },
+
+  async update(id: string, userId: string, data: UpdatePurchaseInput): Promise<Purchase> {
+    const updated = await purchasesRepository.update(id, userId, data)
+    if (!updated) {
+      throw new NotFoundError('compra não encontrada')
+    }
+    return updated
   },
 }

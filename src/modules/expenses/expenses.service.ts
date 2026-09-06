@@ -14,6 +14,15 @@ async function assertAccountBelongsToUser(accountId: string, userId: string): Pr
   if (account.status === 'archived') {
     throw new ConflictError('conta arquivada, não é possível lançar')
   }
+  // Saldo ATUAL da conta, antes deste lançamento — não é "isso deixaria negativa", é "já
+  // está zerada ou negativa agora". Uma conta positiva aceita um lançamento maior que o
+  // saldo normalmente (fica negativa depois, permitido); só bloqueia quem já está em 0/negativo.
+  const balance = await accountsRepository.getBalance(accountId, userId)
+  if ((balance?.balanceCents ?? 0) <= 0) {
+    throw new ConflictError(
+      'esta conta está com saldo zero ou negativo, não é possível registrar um novo lançamento',
+    )
+  }
 }
 
 async function assertCategoryIsExpenseAndVisible(

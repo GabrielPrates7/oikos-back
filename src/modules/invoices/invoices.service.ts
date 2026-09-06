@@ -83,6 +83,15 @@ export const invoicesService = {
       throw new NotFoundError('conta não encontrada')
     }
 
+    // Saldo ATUAL da conta pagadora, antes deste pagamento — mesma regra usada em
+    // expenses/transfers/goal-contributions.
+    const balance = await accountsRepository.getBalance(data.accountId, userId)
+    if ((balance?.balanceCents ?? 0) <= 0) {
+      throw new ConflictError(
+        'esta conta está com saldo zero ou negativo, não é possível registrar um novo lançamento',
+      )
+    }
+
     const totalCents = await invoicesRepository.getInvoiceTotal(invoiceId)
     if (data.amountCents !== undefined && data.amountCents !== totalCents) {
       throw new AppError(

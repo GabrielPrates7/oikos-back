@@ -9,5 +9,7 @@ export interface Expense {
   amount_cents: number
   payment_method: PaymentMethod
   expense_date: string
+  is_essential: boolean
+  is_fixed: boolean
   created_at: Date
 }

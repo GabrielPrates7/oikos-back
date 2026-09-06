@@ -16,6 +16,12 @@ async function assertAccountBelongsToUserAndActive(
   if (account.status === 'archived') {
     throw new ConflictError('conta arquivada, não é possível lançar')
   }
+  const balance = await accountsRepository.getBalance(accountId, userId)
+  if ((balance?.balanceCents ?? 0) <= 0) {
+    throw new ConflictError(
+      'esta conta está com saldo zero ou negativo, não é possível registrar um novo lançamento',
+    )
+  }
 }
 
 export const contributionsService = {

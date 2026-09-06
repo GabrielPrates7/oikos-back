@@ -13,8 +13,8 @@ export interface ExpenseFilters {
 export const expensesRepository = {
   async create(userId: string, data: CreateExpenseInput): Promise<Expense> {
     const result = await pool.query<Expense>(
-      `INSERT INTO expenses (user_id, account_id, category_id, description, amount_cents, payment_method, expense_date)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO expenses (user_id, account_id, category_id, description, amount_cents, payment_method, expense_date, is_essential, is_fixed)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [
         userId,
@@ -24,6 +24,8 @@ export const expensesRepository = {
         data.amount_cents,
         data.payment_method,
         data.expense_date,
+        data.is_essential,
+        data.is_fixed,
       ],
     )
     return result.rows[0]
