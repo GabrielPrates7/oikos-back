@@ -4,13 +4,23 @@ import { categoriesRepository } from './categories.repository.js'
 import type { CreateCategoryInput, UpdateCategoryInput } from './categories.schema.js'
 import type { Category, CategoryType } from './categories.types.js'
 
+export type CategoryWithUsage = Category & { usageCount: number }
+
 export const categoriesService = {
   async create(userId: string, data: CreateCategoryInput): Promise<Category> {
     return categoriesRepository.create(userId, data)
   },
 
-  async listVisibleToUser(userId: string, type?: CategoryType): Promise<Category[]> {
-    return categoriesRepository.findAllVisibleToUser(userId, type)
+  async listVisibleToUser(userId: string, type?: CategoryType): Promise<CategoryWithUsage[]> {
+    const categories = await categoriesRepository.findAllVisibleToUser(userId, type)
+    // N+1 aceitável aqui — mesma lógica de accounts.service.listByUser: é a lista de
+    // categorias visíveis a um único usuário (tipicamente poucas dezenas de linhas).
+    return Promise.all(
+      categories.map(async (category) => {
+        const usageCount = await categoriesRepository.countUsage(category.id, userId)
+        return { ...category, usageCount }
+      }),
+    )
   },
 
   async getVisibleById(id: string, userId: string): Promise<Category> {

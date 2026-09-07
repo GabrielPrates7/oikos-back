@@ -71,6 +71,22 @@ export const categoriesRepository = {
     return result.rows[0] ?? null
   },
 
+  // Escopado por usuário mesmo pra categoria padrão (user_id IS NULL, compartilhada) — o
+  // que interessa aqui é "quantas vezes ESSE usuário usou essa categoria", não o total
+  // global entre todos os usuários (que vazaria atividade de terceiros e não diz nada útil
+  // pra quem está olhando a própria lista de Categorias).
+  async countUsage(categoryId: string, userId: string): Promise<number> {
+    const result = await pool.query<{ count: number }>(
+      `SELECT (
+         (SELECT COUNT(*) FROM income_entries WHERE category_id = $1 AND user_id = $2)
+         + (SELECT COUNT(*) FROM expenses WHERE category_id = $1 AND user_id = $2)
+         + (SELECT COUNT(*) FROM purchases WHERE category_id = $1 AND user_id = $2)
+       )::int AS count`,
+      [categoryId, userId],
+    )
+    return result.rows[0].count
+  },
+
   async delete(id: string, userId: string): Promise<boolean> {
     const result = await pool.query('DELETE FROM categories WHERE id = $1 AND user_id = $2', [
       id,
