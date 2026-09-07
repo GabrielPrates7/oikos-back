@@ -12,16 +12,21 @@ export const createPurchaseSchema = z.object({
   is_fixed: z.boolean(),
 })
 
-// Deliberadamente SEM total_amount_cents, installments_count ou credit_card_id (mesma
-// decisão da Fase 11): mudar valor, parcelamento ou cartão de uma compra já faturada exigiria
-// recalcular parcelas/faturas já geradas, e fazer isso sem essa lógica corromperia dado
-// financeiro. Chaves fora deste schema são descartadas pelo Zod (comportamento padrão de
-// z.object, sem .strict()) — nunca aplicadas silenciosamente.
+// Campos estruturais (credit_card_id, total_amount_cents, installments_count,
+// purchase_date) agora são aceitos aqui — mudar qualquer um deles faz purchases.service
+// apagar as parcelas antigas e gerar novas do zero (reaproveitando invoice-assignment.util,
+// mesma lógica da Fase 11), bloqueado se a compra já tiver parcela paga. Chaves fora deste
+// schema são descartadas pelo Zod (comportamento padrão de z.object, sem .strict()) — nunca
+// aplicadas silenciosamente.
 export const updatePurchaseSchema = z.object({
   description: z.string().min(1).optional(),
   category_id: z.string().uuid().optional(),
   is_essential: z.boolean().optional(),
   is_fixed: z.boolean().optional(),
+  credit_card_id: z.string().uuid().optional(),
+  total_amount_cents: z.number().int().positive().optional(),
+  installments_count: z.number().int().min(1).optional(),
+  purchase_date: isoDateSchema.optional(),
 })
 
 export type CreatePurchaseInput = z.infer<typeof createPurchaseSchema>

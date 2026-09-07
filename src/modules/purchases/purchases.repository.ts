@@ -1,7 +1,12 @@
-import type { PoolClient } from 'pg'
+import type { Pool, PoolClient } from 'pg'
 import { pool } from '../../config/database.js'
 import type { CreatePurchaseInput, UpdatePurchaseInput } from './purchases.schema.js'
 import type { Purchase, PurchaseWithCategory } from './purchases.types.js'
+
+// update() roda tanto fora de transação (edição simples) quanto dentro de uma (edição
+// estrutural, em purchases.service) — aceita pool ou client indistintamente, já que os
+// dois expõem a mesma assinatura de .query() usada aqui.
+type QueryExecutor = Pool | PoolClient
 
 export const purchasesRepository = {
   // Fase 11: só criação, sempre dentro da transação de purchases.service.
@@ -33,7 +38,12 @@ export const purchasesRepository = {
     return result.rows[0] ?? null
   },
 
-  async update(id: string, userId: string, data: UpdatePurchaseInput): Promise<Purchase | null> {
+  async update(
+    id: string,
+    userId: string,
+    data: UpdatePurchaseInput,
+    executor: QueryExecutor = pool,
+  ): Promise<Purchase | null> {
     const entries = Object.entries(data).filter(([, value]) => value !== undefined)
 
     if (entries.length === 0) {
@@ -44,22 +54,48 @@ export const purchasesRepository = {
     const values: unknown[] = entries.map(([, value]) => value)
     values.push(id, userId)
 
-    const result = await pool.query<Purchase>(
+    const result = await executor.query<Purchase>(
       `UPDATE purchases SET ${fields.join(', ')} WHERE id = $${entries.length + 1} AND user_id = $${entries.length + 2} RETURNING *`,
       values,
     )
     return result.rows[0] ?? null
   },
 
+  // true se QUALQUER parcela dessa compra estiver numa fatura já paga — usado tanto pra
+  // bloquear exclusão quanto edição estrutural (valor/parcelamento/data/cartão), já que
+  // as duas exigem apagar parcelas que já foram cobradas de verdade.
+  async hasAnyPaidInstallment(purchaseId: string): Promise<boolean> {
+    const result = await pool.query<{ exists: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM installments i
+         JOIN invoices inv ON inv.id = i.invoice_id
+         WHERE i.purchase_id = $1 AND inv.status = 'paid'
+       ) AS exists`,
+      [purchaseId],
+    )
+    return result.rows[0].exists
+  },
+
+  // Sem client/transação — a exclusão em si é uma única instrução, e o cascade de
+  // installments (ON DELETE CASCADE, ver migration) é resolvido atomicamente pelo próprio
+  // Postgres dentro dela.
+  async delete(id: string, userId: string): Promise<void> {
+    await pool.query('DELETE FROM purchases WHERE id = $1 AND user_id = $2', [id, userId])
+  },
+
   // Nível de compra só — sem parcelas/faturas, isso é histórico "o que foi comprado",
   // não o extrato de fatura (que já existe em invoices/installments). payment_status:
   // 'paid' só quando TODAS as parcelas estão em fatura paga (bool_and sobre o grupo);
-  // uma única query agregada, sem N+1 por compra. GROUP BY p.id é suficiente pra liberar
-  // p.* inteiro (dependência funcional da chave primária), sem precisar listar cada coluna.
+  // has_paid_installment: true se QUALQUER parcela estiver (bool_or) — mesma semântica de
+  // hasAnyPaidInstallment, exposta aqui pra UI travar os campos estruturais de edição sem
+  // precisar de uma chamada extra por compra. Uma única query agregada, sem N+1.
+  // GROUP BY p.id é suficiente pra liberar p.* inteiro (dependência funcional da chave
+  // primária), sem precisar listar cada coluna.
   async findAllByCard(creditCardId: string): Promise<PurchaseWithCategory[]> {
     const result = await pool.query<PurchaseWithCategory>(
       `SELECT p.*, c.name AS category_name, c.icon AS category_icon,
-              CASE WHEN bool_and(inv.status = 'paid') THEN 'paid' ELSE 'pending' END AS payment_status
+              CASE WHEN bool_and(inv.status = 'paid') THEN 'paid' ELSE 'pending' END AS payment_status,
+              COALESCE(bool_or(inv.status = 'paid'), false) AS has_paid_installment
        FROM purchases p
        JOIN categories c ON c.id = p.category_id
        LEFT JOIN installments i ON i.purchase_id = p.id

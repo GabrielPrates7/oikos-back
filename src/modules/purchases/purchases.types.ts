@@ -18,4 +18,5 @@ export interface PurchaseWithCategory extends Purchase {
   category_name: string
   category_icon: string | null
   payment_status: PurchasePaymentStatus
+  has_paid_installment: boolean
 }

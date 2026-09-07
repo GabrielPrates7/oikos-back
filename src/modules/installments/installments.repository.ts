@@ -16,4 +16,11 @@ export const installmentsRepository = {
     )
     return result.rows[0]
   },
+
+  // Edição estrutural (purchases.service) apaga tudo e gera de novo do zero — sempre
+  // dentro da mesma transação, e sempre depois de confirmar via hasAnyPaidInstallment que
+  // nenhuma dessas parcelas está numa fatura paga.
+  async deleteByPurchaseId(client: PoolClient, purchaseId: string): Promise<void> {
+    await client.query('DELETE FROM installments WHERE purchase_id = $1', [purchaseId])
+  },
 }

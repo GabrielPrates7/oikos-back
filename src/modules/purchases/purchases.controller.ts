@@ -19,3 +19,12 @@ export async function update(request: FastifyRequest, reply: FastifyReply): Prom
   const purchase = await purchasesService.update(id, request.user!.id, body)
   reply.send({ purchase })
 }
+
+export async function deletePurchase(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const { id } = idParamsSchema.parse(request.params)
+  await purchasesService.deletePurchase(id, request.user!.id)
+  reply.code(204).send()
+}

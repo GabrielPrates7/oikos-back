@@ -126,14 +126,134 @@ export const purchasesService = {
   },
 
   async update(id: string, userId: string, data: UpdatePurchaseInput): Promise<Purchase> {
+    const existing = await purchasesRepository.findByIdAndUser(id, userId)
+    if (!existing) {
+      throw new NotFoundError('compra não encontrada')
+    }
+
+    const isStructuralChange =
+      data.credit_card_id !== undefined ||
+      data.total_amount_cents !== undefined ||
+      data.installments_count !== undefined ||
+      data.purchase_date !== undefined
+
     if (data.category_id !== undefined) {
       await assertCategoryIsExpenseAndVisible(data.category_id, userId)
     }
 
-    const updated = await purchasesRepository.update(id, userId, data)
-    if (!updated) {
+    if (!isStructuralChange) {
+      const updated = await purchasesRepository.update(id, userId, data)
+      if (!updated) {
+        throw new NotFoundError('compra não encontrada')
+      }
+      return updated
+    }
+
+    // Mudar valor/parcelamento/data/cartão exige apagar as parcelas antigas e gerar novas
+    // do zero — mesmo bloqueio da exclusão, e pelo mesmo motivo: uma parcela já paga é um
+    // registro financeiro que já aconteceu de verdade, não pode ser desfeito por edição.
+    const hasPaid = await purchasesRepository.hasAnyPaidInstallment(id)
+    if (hasPaid) {
+      throw new ConflictError('esta compra tem parcela já paga e não pode ser alterada')
+    }
+
+    const creditCardId = data.credit_card_id ?? existing.credit_card_id
+    const creditCard = await creditCardsRepository.findByIdAndUser(creditCardId, userId)
+    if (!creditCard) {
+      throw new NotFoundError('cartão não encontrado')
+    }
+    if (creditCard.status === 'archived') {
+      throw new ConflictError('cartão arquivado')
+    }
+
+    const totalAmountCents = data.total_amount_cents ?? existing.total_amount_cents
+    const installmentsCount = data.installments_count ?? existing.installments_count
+    const purchaseDate = data.purchase_date ?? existing.purchase_date
+
+    const installmentAmounts = splitInstallmentAmounts(totalAmountCents, installmentsCount)
+    const initialReferenceMonth = resolveInitialReferenceMonth(purchaseDate, creditCard.closing_day)
+
+    const client: PoolClient = await pool.connect()
+    try {
+      await client.query('BEGIN')
+
+      await installmentsRepository.deleteByPurchaseId(client, id)
+
+      for (let index = 0; index < installmentsCount; index++) {
+        const installmentNumber = index + 1
+        const referenceMonth =
+          index === 0
+            ? initialReferenceMonth
+            : addMonthsToReferenceMonth(initialReferenceMonth, index)
+
+        let invoice = await invoicesRepository.findByCardAndReferenceMonth(
+          client,
+          creditCard.id,
+          referenceMonth,
+        )
+        if (!invoice) {
+          const { closingDate, dueDate } = computeInvoiceDates(
+            referenceMonth,
+            creditCard.closing_day,
+            creditCard.due_day,
+          )
+          invoice = await invoicesRepository.create(client, {
+            creditCardId: creditCard.id,
+            referenceMonth,
+            closingDate,
+            dueDate,
+          })
+        }
+
+        await installmentsRepository.create(client, {
+          purchaseId: id,
+          invoiceId: invoice.id,
+          installmentNumber,
+          amountCents: installmentAmounts[index],
+        })
+      }
+
+      const updated = await purchasesRepository.update(
+        id,
+        userId,
+        {
+          description: data.description,
+          category_id: data.category_id,
+          is_essential: data.is_essential,
+          is_fixed: data.is_fixed,
+          credit_card_id: creditCardId,
+          total_amount_cents: totalAmountCents,
+          installments_count: installmentsCount,
+          purchase_date: purchaseDate,
+        },
+        client,
+      )
+      if (!updated) {
+        throw new NotFoundError('compra não encontrada')
+      }
+
+      await client.query('COMMIT')
+      return updated
+    } catch (error) {
+      await client.query('ROLLBACK')
+      throw error
+    } finally {
+      client.release()
+    }
+  },
+
+  async deletePurchase(id: string, userId: string): Promise<void> {
+    const existing = await purchasesRepository.findByIdAndUser(id, userId)
+    if (!existing) {
       throw new NotFoundError('compra não encontrada')
     }
-    return updated
+
+    const hasPaid = await purchasesRepository.hasAnyPaidInstallment(id)
+    if (hasPaid) {
+      throw new ConflictError('esta compra tem parcela já paga e não pode ser excluída')
+    }
+
+    // Cascade (ON DELETE CASCADE em installments.purchase_id) cuida das parcelas.
+    await purchasesRepository.delete(id, userId)
   },
 }
