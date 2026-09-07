@@ -95,8 +95,8 @@ export const accountsRepository = {
       `SELECT
          (
            a.initial_balance_cents
-           + COALESCE((SELECT SUM(amount_cents) FROM income_entries WHERE account_id = a.id), 0)
-           - COALESCE((SELECT SUM(amount_cents) FROM expenses WHERE account_id = a.id), 0)
+           + COALESCE((SELECT SUM(amount_cents) FROM income_entries WHERE account_id = a.id AND is_received = true), 0)
+           - COALESCE((SELECT SUM(amount_cents) FROM expenses WHERE account_id = a.id AND is_paid = true), 0)
            - COALESCE((SELECT SUM(amount_cents) FROM transfers WHERE from_account_id = a.id), 0)
            + COALESCE((SELECT SUM(amount_cents) FROM transfers WHERE to_account_id = a.id), 0)
            - COALESCE((SELECT SUM(amount_cents) FROM invoice_payments WHERE account_id = a.id), 0)
@@ -154,8 +154,8 @@ export const accountsRepository = {
       `SELECT
          (
            a.initial_balance_cents
-           + COALESCE((SELECT SUM(amount_cents) FROM income_entries WHERE account_id = a.id AND entry_date < $3), 0)
-           - COALESCE((SELECT SUM(amount_cents) FROM expenses WHERE account_id = a.id AND expense_date < $3), 0)
+           + COALESCE((SELECT SUM(amount_cents) FROM income_entries WHERE account_id = a.id AND entry_date < $3 AND is_received = true), 0)
+           - COALESCE((SELECT SUM(amount_cents) FROM expenses WHERE account_id = a.id AND expense_date < $3 AND is_paid = true), 0)
            - COALESCE((SELECT SUM(amount_cents) FROM transfers WHERE from_account_id = a.id AND transfer_date < $3), 0)
            + COALESCE((SELECT SUM(amount_cents) FROM transfers WHERE to_account_id = a.id AND transfer_date < $3), 0)
            - COALESCE((SELECT SUM(amount_cents) FROM invoice_payments WHERE account_id = a.id AND payment_date < $3), 0)

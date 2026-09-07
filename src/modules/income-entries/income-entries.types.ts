@@ -9,5 +9,8 @@ export interface IncomeEntry {
   amount_cents: number
   entry_date: string
   receipt_method: ReceiptMethod
+  is_received: boolean
+  is_planned: boolean
+  received_date: string | null
   created_at: Date
 }

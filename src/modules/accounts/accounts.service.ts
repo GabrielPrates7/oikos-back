@@ -40,6 +40,12 @@ interface StatementSourceEntry {
   amountCents: number
   date: string
   createdAt: Date
+  // false só pra expense pendente (is_paid=false) ou income pendente (is_received=false) —
+  // aparecem no extrato como histórico, mas não entram no saldo corrente, pelo mesmo
+  // motivo que accounts.repository.getBalance/getBalanceAsOf agora os exclui da soma.
+  // Sem isso o saldo de abertura (via getBalanceAsOf, já filtrado) e o saldo de fechamento
+  // calculado aqui embaixo divergiriam sempre que houvesse alguma pendência no período.
+  affectsBalance: boolean
 }
 
 // type -> se reduz (true) ou aumenta (false) o saldo da conta, mesmo sinal usado na
@@ -164,6 +170,7 @@ export const accountsService = {
           amountCents: row.amount_cents,
           date: row.entry_date,
           createdAt: row.created_at,
+          affectsBalance: row.is_received,
         }),
       ),
       ...expenseRows.map(
@@ -174,6 +181,7 @@ export const accountsService = {
           amountCents: row.amount_cents,
           date: row.expense_date,
           createdAt: row.created_at,
+          affectsBalance: row.is_paid,
         }),
       ),
       ...transferRows.map((row): StatementSourceEntry => {
@@ -186,6 +194,7 @@ export const accountsService = {
           amountCents: row.amount_cents,
           date: row.transfer_date,
           createdAt: row.created_at,
+          affectsBalance: true,
         }
       }),
       ...invoicePaymentRows.map(
@@ -196,6 +205,7 @@ export const accountsService = {
           amountCents: row.amount_cents,
           date: row.date,
           createdAt: row.created_at,
+          affectsBalance: true,
         }),
       ),
       ...goalContributionRows.map(
@@ -206,6 +216,7 @@ export const accountsService = {
           amountCents: row.amount_cents,
           date: row.date,
           createdAt: row.created_at,
+          affectsBalance: true,
         }),
       ),
     ]
@@ -219,7 +230,9 @@ export const accountsService = {
 
     let runningBalanceCents = openingBalanceCents
     const entries: StatementEntry[] = sourceEntries.map((entry) => {
-      runningBalanceCents += REDUCES_BALANCE[entry.type] ? -entry.amountCents : entry.amountCents
+      if (entry.affectsBalance) {
+        runningBalanceCents += REDUCES_BALANCE[entry.type] ? -entry.amountCents : entry.amountCents
+      }
       return {
         id: entry.id,
         type: entry.type,
