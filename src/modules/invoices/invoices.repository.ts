@@ -34,7 +34,7 @@ export const invoicesRepository = {
   // SUM de getInvoiceTotal) pra listagem não precisar de N+1 fetch por fatura.
   async findAllByUser(
     userId: string,
-    filters: { creditCardId?: string } = {},
+    filters: { creditCardId?: string; search?: string } = {},
   ): Promise<InvoiceWithTotal[]> {
     const conditions = ['cc.user_id = $1']
     const values: unknown[] = [userId]
@@ -42,6 +42,18 @@ export const invoicesRepository = {
     if (filters.creditCardId !== undefined) {
       values.push(filters.creditCardId)
       conditions.push(`i.credit_card_id = $${values.length}`)
+    }
+
+    // Busca por descrição de compra dentro da fatura, não por nome do cartão (esse já tem
+    // filtro próprio via creditCardId) — EXISTS evita duplicar a linha da fatura por
+    // parcela batendo no ILIKE.
+    if (filters.search !== undefined) {
+      values.push(`%${filters.search}%`)
+      conditions.push(`EXISTS (
+        SELECT 1 FROM installments ins
+        JOIN purchases p ON p.id = ins.purchase_id
+        WHERE ins.invoice_id = i.id AND p.description ILIKE $${values.length}
+      )`)
     }
 
     const result = await pool.query<InvoiceWithTotal>(
@@ -78,7 +90,8 @@ export const invoicesRepository = {
          ins.amount_cents,
          p.description,
          c.name AS category_name,
-         c.icon AS category_icon
+         c.icon AS category_icon,
+         p.is_essential
        FROM installments ins
        JOIN purchases p ON p.id = ins.purchase_id
        JOIN categories c ON c.id = p.category_id

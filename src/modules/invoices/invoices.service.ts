@@ -39,8 +39,11 @@ function withDisplayStatus(invoice: Invoice): InvoiceWithDisplayStatus {
 }
 
 export const invoicesService = {
-  async listForUser(userId: string, creditCardId?: string): Promise<InvoiceListItem[]> {
-    const invoices = await invoicesRepository.findAllByUser(userId, { creditCardId })
+  async listForUser(
+    userId: string,
+    filters: { creditCardId?: string; search?: string } = {},
+  ): Promise<InvoiceListItem[]> {
+    const invoices = await invoicesRepository.findAllByUser(userId, filters)
     return invoices.map(({ total_cents, ...invoice }) => ({
       ...withDisplayStatus(invoice),
       totalCents: total_cents,

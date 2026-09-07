@@ -5,6 +5,7 @@ import { invoicesService } from './invoices.service.js'
 
 const listQuerySchema = z.object({
   creditCardId: z.string().uuid().optional(),
+  search: z.string().trim().min(1).optional(),
 })
 
 const idParamsSchema = z.object({
@@ -12,8 +13,8 @@ const idParamsSchema = z.object({
 })
 
 export async function list(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  const { creditCardId } = listQuerySchema.parse(request.query)
-  const invoices = await invoicesService.listForUser(request.user!.id, creditCardId)
+  const { creditCardId, search } = listQuerySchema.parse(request.query)
+  const invoices = await invoicesService.listForUser(request.user!.id, { creditCardId, search })
   reply.send({ invoices })
 }
 
