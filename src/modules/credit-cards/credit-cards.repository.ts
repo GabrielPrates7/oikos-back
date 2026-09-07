@@ -82,6 +82,26 @@ export const creditCardsRepository = {
     return result.rows[0] ?? null
   },
 
+  // Só purchases importa aqui — installments/invoices/invoice_payments dependem de purchases
+  // via FK (ON DELETE...), então se não há purchase não há nada mais vinculado ao cartão.
+  async hasAnyMovement(id: string): Promise<boolean> {
+    const result = await pool.query<{ exists: boolean }>(
+      'SELECT EXISTS(SELECT 1 FROM purchases WHERE credit_card_id = $1) AS exists',
+      [id],
+    )
+    return result.rows[0].exists
+  },
+
+  // Exclusão de verdade (não archive) — só chamada pelo service depois de confirmar posse
+  // e ausência de compra vinculada.
+  async deletePermanently(id: string, userId: string): Promise<boolean> {
+    const result = await pool.query('DELETE FROM credit_cards WHERE id = $1 AND user_id = $2', [
+      id,
+      userId,
+    ])
+    return (result.rowCount ?? 0) > 0
+  },
+
   async getAvailableLimit(
     id: string,
     userId: string,

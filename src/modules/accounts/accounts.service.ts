@@ -1,4 +1,4 @@
-import { NotFoundError } from '../../errors/AppError.js'
+import { ConflictError, NotFoundError } from '../../errors/AppError.js'
 import { contributionsRepository } from '../goals/contributions.repository.js'
 import { expensesRepository } from '../expenses/expenses.repository.js'
 import { incomeEntriesRepository } from '../income-entries/income-entries.repository.js'
@@ -98,6 +98,23 @@ export const accountsService = {
     if (!account) {
       throw new NotFoundError('conta não encontrada')
     }
+  },
+
+  // Diferente de archive (soft delete, sempre permitido): aqui a linha some de verdade do
+  // banco, então só é permitido quando não há nenhum lançamento vinculado — senão viraria
+  // FK quebrada ou perda silenciosa de histórico financeiro.
+  async deletePermanently(id: string, userId: string): Promise<void> {
+    const account = await accountsRepository.findByIdAndUser(id, userId)
+    if (!account) {
+      throw new NotFoundError('conta não encontrada')
+    }
+    const hasMovement = await accountsRepository.hasAnyMovement(id)
+    if (hasMovement) {
+      throw new ConflictError(
+        'esta conta tem lançamentos vinculados e não pode ser excluída — arquive em vez disso',
+      )
+    }
+    await accountsRepository.deletePermanently(id, userId)
   },
 
   async getBalance(

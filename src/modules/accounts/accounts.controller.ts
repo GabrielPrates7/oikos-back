@@ -58,6 +58,15 @@ export async function activate(request: FastifyRequest, reply: FastifyReply): Pr
   reply.code(204).send()
 }
 
+export async function deletePermanently(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const { id } = idParamsSchema.parse(request.params)
+  await accountsService.deletePermanently(id, request.user!.id)
+  reply.code(204).send()
+}
+
 export async function getBalance(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const { id } = idParamsSchema.parse(request.params)
   const balance = await accountsService.getBalance(id, request.user!.id)

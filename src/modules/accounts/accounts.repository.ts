@@ -113,6 +113,36 @@ export const accountsRepository = {
     return { balanceCents: row.balance_cents }
   },
 
+  // UNION ALL (não UNION) — não precisa deduplicar, só saber se existe QUALQUER linha;
+  // EXISTS já para no primeiro achado, sem varrer as 5 tabelas inteiras.
+  async hasAnyMovement(id: string): Promise<boolean> {
+    const result = await pool.query<{ exists: boolean }>(
+      `SELECT EXISTS(
+         SELECT 1 FROM income_entries WHERE account_id = $1
+         UNION ALL
+         SELECT 1 FROM expenses WHERE account_id = $1
+         UNION ALL
+         SELECT 1 FROM transfers WHERE from_account_id = $1 OR to_account_id = $1
+         UNION ALL
+         SELECT 1 FROM invoice_payments WHERE account_id = $1
+         UNION ALL
+         SELECT 1 FROM goal_contributions WHERE account_id = $1
+       ) AS exists`,
+      [id],
+    )
+    return result.rows[0].exists
+  },
+
+  // Exclusão de verdade (não archive) — só chamada pelo service depois de confirmar posse
+  // e ausência de movimentação. rowCount > 0 confirma que a linha existia e foi removida.
+  async deletePermanently(id: string, userId: string): Promise<boolean> {
+    const result = await pool.query('DELETE FROM accounts WHERE id = $1 AND user_id = $2', [
+      id,
+      userId,
+    ])
+    return (result.rowCount ?? 0) > 0
+  },
+
   async getBalanceAsOf(
     id: string,
     userId: string,

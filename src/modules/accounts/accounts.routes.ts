@@ -4,6 +4,7 @@ import {
   activate,
   archive,
   create,
+  deletePermanently,
   getBalance,
   getById,
   getStatement,
@@ -19,6 +20,7 @@ export async function accountsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/:id', getById)
   app.put('/:id', update)
   app.delete('/:id', archive)
+  app.delete('/:id/permanent', deletePermanently)
   app.post('/:id/activate', activate)
   app.get('/:id/balance', getBalance)
   app.get('/:id/statement', getStatement)

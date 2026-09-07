@@ -143,6 +143,22 @@ export const dashboardRepository = {
     return result.rows
   },
 
+  // Soma direto nas parcelas (não faz N+1 de getInvoiceTotal por fatura) — join até
+  // credit_cards só pra confirmar posse. status != 'paid' cobre 'open' e 'closed', os
+  // únicos valores brutos persistidos além de 'paid' ('overdue' é sempre calculado na
+  // leitura, nunca gravado — ver invoice-status.util.ts).
+  async getTotalUnpaidInvoices(userId: string): Promise<number> {
+    const result = await pool.query<{ total_cents: number }>(
+      `SELECT COALESCE(SUM(ins.amount_cents), 0)::int AS total_cents
+       FROM installments ins
+       JOIN invoices i ON i.id = ins.invoice_id
+       JOIN credit_cards cc ON cc.id = i.credit_card_id
+       WHERE cc.user_id = $1 AND i.status != 'paid'`,
+      [userId],
+    )
+    return result.rows[0].total_cents
+  },
+
   async getRecentGoalContributions(
     userId: string,
     monthStart: string,

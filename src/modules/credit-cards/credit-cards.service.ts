@@ -1,4 +1,4 @@
-import { NotFoundError } from '../../errors/AppError.js'
+import { ConflictError, NotFoundError } from '../../errors/AppError.js'
 import { creditCardsRepository } from './credit-cards.repository.js'
 import type { CreateCreditCardInput, UpdateCreditCardInput } from './credit-cards.schema.js'
 import type { CreditCard, CreditCardStatus } from './credit-cards.types.js'
@@ -40,6 +40,22 @@ export const creditCardsService = {
     if (!creditCard) {
       throw new NotFoundError('cartão não encontrado')
     }
+  },
+
+  // Diferente de archive (soft delete, sempre permitido): aqui a linha some de verdade do
+  // banco, então só é permitido quando não há nenhuma compra vinculada.
+  async deletePermanently(id: string, userId: string): Promise<void> {
+    const creditCard = await creditCardsRepository.findByIdAndUser(id, userId)
+    if (!creditCard) {
+      throw new NotFoundError('cartão não encontrado')
+    }
+    const hasMovement = await creditCardsRepository.hasAnyMovement(id)
+    if (hasMovement) {
+      throw new ConflictError(
+        'este cartão tem compras vinculadas e não pode ser excluído — arquive em vez disso',
+      )
+    }
+    await creditCardsRepository.deletePermanently(id, userId)
   },
 
   async getAvailableLimit(

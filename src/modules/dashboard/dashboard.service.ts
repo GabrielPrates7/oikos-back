@@ -53,6 +53,7 @@ export interface DashboardSummary {
     netCents: number
   }
   totalBalanceCents: number
+  totalPendingInvoicesCents: number
   accounts: AccountSummary[]
   creditCards: CreditCardSummary[]
   expensesByCategory: CategoryExpenseSummary[]
@@ -80,6 +81,8 @@ export const dashboardService = {
       (sum, account) => sum + account.balanceCents,
       0,
     )
+
+    const totalPendingInvoicesCents = await dashboardRepository.getTotalUnpaidInvoices(userId)
 
     const creditCards = await creditCardsRepository.findAllByUser(userId)
     const creditCardSummaries: CreditCardSummary[] = await Promise.all(
@@ -203,6 +206,7 @@ export const dashboardService = {
         netCents,
       },
       totalBalanceCents,
+      totalPendingInvoicesCents,
       accounts: accountSummaries,
       creditCards: creditCardSummaries,
       expensesByCategory,
