@@ -1,15 +1,40 @@
 import { ConflictError, NotFoundError } from '../../errors/AppError.js'
+import type { PaginationParams } from '../../utils/pagination.js'
 import { creditCardsRepository } from './credit-cards.repository.js'
 import type { CreateCreditCardInput, UpdateCreditCardInput } from './credit-cards.schema.js'
 import type { CreditCard, CreditCardStatus } from './credit-cards.types.js'
+
+export interface PaginatedCreditCards {
+  items: CreditCard[]
+  total: number
+  sumCreditLimitCents: number
+  sumAvailableLimitCents: number
+  page: number
+  pageSize: number
+}
 
 export const creditCardsService = {
   async create(userId: string, data: CreateCreditCardInput): Promise<CreditCard> {
     return creditCardsRepository.create(userId, data)
   },
 
-  async listByUser(userId: string, status?: CreditCardStatus | 'all'): Promise<CreditCard[]> {
-    return creditCardsRepository.findAllByUser(userId, status)
+  async listByUser(
+    userId: string,
+    status: CreditCardStatus | 'all' | undefined,
+    pagination: PaginationParams,
+  ): Promise<PaginatedCreditCards> {
+    const [items, { total, sumCreditLimitCents, sumAvailableLimitCents }] = await Promise.all([
+      creditCardsRepository.findAllByUser(userId, status, pagination),
+      creditCardsRepository.getFilteredSum(userId, status),
+    ])
+    return {
+      items,
+      total,
+      sumCreditLimitCents,
+      sumAvailableLimitCents,
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+    }
   },
 
   async getById(id: string, userId: string): Promise<CreditCard> {

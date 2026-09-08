@@ -4,6 +4,7 @@ import { expensesRepository } from '../expenses/expenses.repository.js'
 import { incomeEntriesRepository } from '../income-entries/income-entries.repository.js'
 import { invoicePaymentsRepository } from '../invoice-payments/invoice-payments.repository.js'
 import { transfersRepository } from '../transfers/transfers.repository.js'
+import type { PaginatedResult, PaginationParams } from '../../utils/pagination.js'
 import { accountsRepository } from './accounts.repository.js'
 import type { CreateAccountInput, UpdateAccountInput } from './accounts.schema.js'
 import type { Account, AccountStatus } from './accounts.types.js'
@@ -64,16 +65,25 @@ export const accountsService = {
     return accountsRepository.create(userId, data)
   },
 
-  async listByUser(userId: string, status?: AccountStatus | 'all'): Promise<AccountWithBalance[]> {
-    const accounts = await accountsRepository.findAllByUser(userId, status)
-    // Mesmo padrão de dashboard.service.ts: N+1 aceitável aqui porque é a lista de contas
-    // de um único usuário (tipicamente poucas linhas), e correção bate antes de otimização.
-    return Promise.all(
+  async listByUser(
+    userId: string,
+    status: AccountStatus | 'all' | undefined,
+    pagination: PaginationParams,
+  ): Promise<PaginatedResult<AccountWithBalance>> {
+    const [accounts, { total, sumCents }] = await Promise.all([
+      accountsRepository.findAllByUser(userId, status, pagination),
+      accountsRepository.getFilteredSum(userId, status),
+    ])
+    // Mesmo padrão de dashboard.service.ts: N+1 aceitável aqui porque é uma página de
+    // contas de um único usuário (no máximo pageSize linhas), e correção bate antes de
+    // otimização.
+    const items = await Promise.all(
       accounts.map(async (account) => {
         const balance = await accountsRepository.getBalance(account.id, userId)
         return { ...account, balanceCents: balance?.balanceCents ?? account.initial_balance_cents }
       }),
     )
+    return { items, total, sumCents, page: pagination.page, pageSize: pagination.pageSize }
   },
 
   async getById(id: string, userId: string): Promise<Account> {

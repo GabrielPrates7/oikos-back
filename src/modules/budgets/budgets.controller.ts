@@ -1,10 +1,12 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
+import { paginationQuerySchema } from '../../utils/pagination.js'
 import { createBudgetSchema, referenceMonthSchema, updateBudgetSchema } from './budgets.schema.js'
 import { budgetsService } from './budgets.service.js'
 
 const listQuerySchema = z.object({
   month: referenceMonthSchema,
+  ...paginationQuerySchema,
 })
 
 const idParamsSchema = z.object({
@@ -12,9 +14,14 @@ const idParamsSchema = z.object({
 })
 
 export async function list(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  const { month } = listQuerySchema.parse(request.query)
-  const budgets = await budgetsService.listByUserAndMonth(request.user!.id, month)
-  reply.send({ budgets })
+  const { month, page, pageSize } = listQuerySchema.parse(request.query)
+  const result = await budgetsService.listByUserAndMonth(request.user!.id, month, { page, pageSize })
+  reply.send({
+    budgets: result.items,
+    total: result.total,
+    page: result.page,
+    pageSize: result.pageSize,
+  })
 }
 
 export async function create(request: FastifyRequest, reply: FastifyReply): Promise<void> {

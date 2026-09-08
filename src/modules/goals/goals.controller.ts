@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
+import { paginationQuerySchema } from '../../utils/pagination.js'
 import { createGoalSchema, updateGoalSchema } from './goals.schema.js'
 import { goalsService } from './goals.service.js'
 
@@ -7,9 +8,12 @@ const idParamsSchema = z.object({
   id: z.string().uuid(),
 })
 
+const listQuerySchema = z.object(paginationQuerySchema)
+
 export async function list(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  const goals = await goalsService.listByUser(request.user!.id)
-  reply.send({ goals })
+  const { page, pageSize } = listQuerySchema.parse(request.query)
+  const result = await goalsService.listByUser(request.user!.id, { page, pageSize })
+  reply.send({ goals: result.items, total: result.total, page: result.page, pageSize: result.pageSize })
 }
 
 export async function create(request: FastifyRequest, reply: FastifyReply): Promise<void> {

@@ -1,4 +1,5 @@
 import { AppError, ConflictError, NotFoundError } from '../../errors/AppError.js'
+import type { PaginatedList, PaginationParams } from '../../utils/pagination.js'
 import { isUniqueViolation } from '../../utils/postgres.js'
 import { categoriesRepository } from '../categories/categories.repository.js'
 import { budgetsRepository } from './budgets.repository.js'
@@ -42,9 +43,16 @@ export const budgetsService = {
     }
   },
 
-  async listByUserAndMonth(userId: string, referenceMonth: string): Promise<BudgetWithSpent[]> {
-    const budgets = await budgetsRepository.findAllByUserAndMonth(userId, referenceMonth)
-    return Promise.all(
+  async listByUserAndMonth(
+    userId: string,
+    referenceMonth: string,
+    pagination: PaginationParams,
+  ): Promise<PaginatedList<BudgetWithSpent>> {
+    const [budgets, total] = await Promise.all([
+      budgetsRepository.findAllByUserAndMonth(userId, referenceMonth, pagination),
+      budgetsRepository.countByUserAndMonth(userId, referenceMonth),
+    ])
+    const items = await Promise.all(
       budgets.map(async (budget) => {
         const spentCents = await budgetsRepository.getSpentAmount(
           userId,
@@ -54,6 +62,7 @@ export const budgetsService = {
         return withSpent(budget, spentCents)
       }),
     )
+    return { items, total, page: pagination.page, pageSize: pagination.pageSize }
   },
 
   async update(id: string, userId: string, data: UpdateBudgetInput): Promise<Budget> {

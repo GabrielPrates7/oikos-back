@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
+import { paginationQuerySchema } from '../../utils/pagination.js'
 import { purchasesService } from '../purchases/purchases.service.js'
 import {
   createCreditCardSchema,
@@ -10,6 +11,7 @@ import { creditCardsService } from './credit-cards.service.js'
 
 const listQuerySchema = z.object({
   status: creditCardStatusQuerySchema.optional(),
+  ...paginationQuerySchema,
 })
 
 const idParamsSchema = z.object({
@@ -17,9 +19,16 @@ const idParamsSchema = z.object({
 })
 
 export async function list(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  const { status } = listQuerySchema.parse(request.query)
-  const creditCards = await creditCardsService.listByUser(request.user!.id, status)
-  reply.send({ creditCards })
+  const { status, page, pageSize } = listQuerySchema.parse(request.query)
+  const result = await creditCardsService.listByUser(request.user!.id, status, { page, pageSize })
+  reply.send({
+    creditCards: result.items,
+    total: result.total,
+    sumCreditLimitCents: result.sumCreditLimitCents,
+    sumAvailableLimitCents: result.sumAvailableLimitCents,
+    page: result.page,
+    pageSize: result.pageSize,
+  })
 }
 
 export async function create(request: FastifyRequest, reply: FastifyReply): Promise<void> {

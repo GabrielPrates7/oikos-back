@@ -1,6 +1,19 @@
 import { pool } from '../../config/database.js'
+import type { PaginationParams } from '../../utils/pagination.js'
 import type { CreateCreditCardInput, UpdateCreditCardInput } from './credit-cards.schema.js'
 import type { CreditCard, CreditCardStatus } from './credit-cards.types.js'
+
+// Compartilhado entre findAllByUser (paginada) e getFilteredSum (agregada, sem
+// LIMIT/OFFSET) — as duas precisam do EXATO mesmo filtro de status.
+function buildStatusClause(
+  status: CreditCardStatus | 'all' | undefined,
+  values: unknown[],
+  alias = '',
+): string {
+  if (status === 'all') return ''
+  values.push(status ?? 'active')
+  return ` AND ${alias}status = $${values.length}`
+}
 
 export const creditCardsRepository = {
   async create(userId: string, data: CreateCreditCardInput): Promise<CreditCard> {
@@ -20,20 +33,65 @@ export const creditCardsRepository = {
     return result.rows[0]
   },
 
-  async findAllByUser(userId: string, status?: CreditCardStatus | 'all'): Promise<CreditCard[]> {
-    if (status === 'all') {
-      const result = await pool.query<CreditCard>(
-        'SELECT * FROM credit_cards WHERE user_id = $1 ORDER BY created_at',
-        [userId],
-      )
-      return result.rows
+  // pagination é opcional de propósito: dashboard.service soma limite/disponível de TODOS
+  // os cartões (nunca paginado) — só o controller de listagem (credit-cards.controller)
+  // passa page/pageSize.
+  async findAllByUser(
+    userId: string,
+    status?: CreditCardStatus | 'all',
+    pagination?: PaginationParams,
+  ): Promise<CreditCard[]> {
+    const values: unknown[] = [userId]
+    const statusClause = buildStatusClause(status, values)
+    let limitClause = ''
+    if (pagination) {
+      const limitIndex = values.push(pagination.pageSize)
+      const offsetIndex = values.push((pagination.page - 1) * pagination.pageSize)
+      limitClause = ` LIMIT $${limitIndex} OFFSET $${offsetIndex}`
     }
 
     const result = await pool.query<CreditCard>(
-      'SELECT * FROM credit_cards WHERE user_id = $1 AND status = $2 ORDER BY created_at',
-      [userId, status ?? 'active'],
+      `SELECT * FROM credit_cards WHERE user_id = $1${statusClause} ORDER BY created_at${limitClause}`,
+      values,
     )
     return result.rows
+  },
+
+  // Mesmo filtro de findAllByUser, sem LIMIT/OFFSET — total (contagem), soma do limite total
+  // (coluna direta) e soma do disponível (mesma fórmula de getAvailableLimit, agregada) num
+  // único round-trip. Duas somas porque CartoesList mostra "Limite total" e "Disponível
+  // total" lado a lado (não cabe no PaginatedResult<T> genérico, que só tem um sumCents).
+  async getFilteredSum(
+    userId: string,
+    status?: CreditCardStatus | 'all',
+  ): Promise<{ total: number; sumCreditLimitCents: number; sumAvailableLimitCents: number }> {
+    const values: unknown[] = [userId]
+    const statusClause = buildStatusClause(status, values, 'cc.')
+    const result = await pool.query<{
+      total: number
+      sum_credit_limit_cents: number
+      sum_available_limit_cents: number
+    }>(
+      `SELECT
+         COUNT(*)::int AS total,
+         COALESCE(SUM(cc.credit_limit_cents), 0)::int AS sum_credit_limit_cents,
+         COALESCE(SUM(
+           cc.credit_limit_cents - COALESCE((
+             SELECT SUM(i.amount_cents)
+             FROM installments i
+             JOIN invoices inv ON inv.id = i.invoice_id
+             WHERE inv.credit_card_id = cc.id AND inv.status != 'paid'
+           ), 0)
+         ), 0)::int AS sum_available_limit_cents
+       FROM credit_cards cc
+       WHERE cc.user_id = $1${statusClause}`,
+      values,
+    )
+    return {
+      total: result.rows[0].total,
+      sumCreditLimitCents: result.rows[0].sum_credit_limit_cents,
+      sumAvailableLimitCents: result.rows[0].sum_available_limit_cents,
+    }
   },
 
   async findByIdAndUser(id: string, userId: string): Promise<CreditCard | null> {

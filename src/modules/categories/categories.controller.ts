@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
+import { paginationQuerySchema } from '../../utils/pagination.js'
 import {
   categoryTypeSchema,
   createCategorySchema,
@@ -9,6 +10,7 @@ import { categoriesService } from './categories.service.js'
 
 const listQuerySchema = z.object({
   type: categoryTypeSchema.optional(),
+  ...paginationQuerySchema,
 })
 
 const idParamsSchema = z.object({
@@ -16,9 +18,14 @@ const idParamsSchema = z.object({
 })
 
 export async function list(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  const { type } = listQuerySchema.parse(request.query)
-  const categories = await categoriesService.listVisibleToUser(request.user!.id, type)
-  reply.send({ categories })
+  const { type, page, pageSize } = listQuerySchema.parse(request.query)
+  const result = await categoriesService.listVisibleToUser(request.user!.id, type, { page, pageSize })
+  reply.send({
+    categories: result.items,
+    total: result.total,
+    page: result.page,
+    pageSize: result.pageSize,
+  })
 }
 
 export async function create(request: FastifyRequest, reply: FastifyReply): Promise<void> {

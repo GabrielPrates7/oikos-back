@@ -1,6 +1,19 @@
 import { pool } from '../../config/database.js'
+import type { PaginationParams } from '../../utils/pagination.js'
 import type { CreateAccountInput, UpdateAccountInput } from './accounts.schema.js'
 import type { Account, AccountStatus } from './accounts.types.js'
+
+// Compartilhado entre findAllByUser (paginada) e getFilteredSum (agregada, sem
+// LIMIT/OFFSET) — as duas precisam do EXATO mesmo filtro de status.
+function buildStatusClause(
+  status: AccountStatus | 'all' | undefined,
+  values: unknown[],
+  alias = '',
+): string {
+  if (status === 'all') return ''
+  values.push(status ?? 'active')
+  return ` AND ${alias}status = $${values.length}`
+}
 
 export const accountsRepository = {
   async create(userId: string, data: CreateAccountInput): Promise<Account> {
@@ -20,20 +33,55 @@ export const accountsRepository = {
     return result.rows[0]
   },
 
-  async findAllByUser(userId: string, status?: AccountStatus | 'all'): Promise<Account[]> {
-    if (status === 'all') {
-      const result = await pool.query<Account>(
-        'SELECT * FROM accounts WHERE user_id = $1 ORDER BY created_at',
-        [userId],
-      )
-      return result.rows
+  // pagination é opcional de propósito: dashboard.service soma saldo de TODAS as contas
+  // (nunca paginado) — só o controller de listagem (accounts.controller) passa page/pageSize.
+  async findAllByUser(
+    userId: string,
+    status?: AccountStatus | 'all',
+    pagination?: PaginationParams,
+  ): Promise<Account[]> {
+    const values: unknown[] = [userId]
+    const statusClause = buildStatusClause(status, values)
+    let limitClause = ''
+    if (pagination) {
+      const limitIndex = values.push(pagination.pageSize)
+      const offsetIndex = values.push((pagination.page - 1) * pagination.pageSize)
+      limitClause = ` LIMIT $${limitIndex} OFFSET $${offsetIndex}`
     }
 
     const result = await pool.query<Account>(
-      'SELECT * FROM accounts WHERE user_id = $1 AND status = $2 ORDER BY created_at',
-      [userId, status ?? 'active'],
+      `SELECT * FROM accounts WHERE user_id = $1${statusClause} ORDER BY created_at${limitClause}`,
+      values,
     )
     return result.rows
+  },
+
+  // Mesmo filtro de findAllByUser, sem LIMIT/OFFSET — total (contagem) e sumCents (soma do
+  // saldo, mesma fórmula de getBalance) num único round-trip.
+  async getFilteredSum(
+    userId: string,
+    status?: AccountStatus | 'all',
+  ): Promise<{ total: number; sumCents: number }> {
+    const values: unknown[] = [userId]
+    const statusClause = buildStatusClause(status, values, 'a.')
+    const result = await pool.query<{ total: number; sum_cents: number }>(
+      `SELECT COUNT(*)::int AS total, COALESCE(SUM(balance_cents), 0)::int AS sum_cents
+       FROM (
+         SELECT (
+           a.initial_balance_cents
+           + COALESCE((SELECT SUM(amount_cents) FROM income_entries WHERE account_id = a.id AND is_received = true), 0)
+           - COALESCE((SELECT SUM(amount_cents) FROM expenses WHERE account_id = a.id AND is_paid = true), 0)
+           - COALESCE((SELECT SUM(amount_cents) FROM transfers WHERE from_account_id = a.id), 0)
+           + COALESCE((SELECT SUM(amount_cents) FROM transfers WHERE to_account_id = a.id), 0)
+           - COALESCE((SELECT SUM(amount_cents) FROM invoice_payments WHERE account_id = a.id), 0)
+           - COALESCE((SELECT SUM(amount_cents) FROM goal_contributions WHERE account_id = a.id), 0)
+         )::int AS balance_cents
+         FROM accounts a
+         WHERE a.user_id = $1${statusClause}
+       ) sub`,
+      values,
+    )
+    return { total: result.rows[0].total, sumCents: result.rows[0].sum_cents }
   },
 
   async findByIdAndUser(id: string, userId: string): Promise<Account | null> {

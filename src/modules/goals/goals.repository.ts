@@ -1,4 +1,5 @@
 import { pool } from '../../config/database.js'
+import type { PaginationParams } from '../../utils/pagination.js'
 import type { CreateGoalInput, UpdateGoalInput } from './goals.schema.js'
 import type { FinancialGoal } from './goals.types.js'
 
@@ -13,12 +14,31 @@ export const goalsRepository = {
     return result.rows[0]
   },
 
-  async findAllByUser(userId: string): Promise<FinancialGoal[]> {
+  // pagination é opcional de propósito, mesmo padrão dos outros módulos paginados — hoje
+  // nada mais no backend chama isso sem paginar.
+  async findAllByUser(userId: string, pagination?: PaginationParams): Promise<FinancialGoal[]> {
+    const values: unknown[] = [userId]
+    let limitClause = ''
+    if (pagination) {
+      const limitIndex = values.push(pagination.pageSize)
+      const offsetIndex = values.push((pagination.page - 1) * pagination.pageSize)
+      limitClause = ` LIMIT $${limitIndex} OFFSET $${offsetIndex}`
+    }
     const result = await pool.query<FinancialGoal>(
-      'SELECT * FROM financial_goals WHERE user_id = $1 ORDER BY created_at',
-      [userId],
+      `SELECT * FROM financial_goals WHERE user_id = $1 ORDER BY created_at${limitClause}`,
+      values,
     )
     return result.rows
+  },
+
+  // Mesmo filtro de findAllByUser, sem LIMIT/OFFSET — só contagem, metas não têm "total
+  // exibido".
+  async countByUser(userId: string): Promise<number> {
+    const result = await pool.query<{ total: number }>(
+      'SELECT COUNT(*)::int AS total FROM financial_goals WHERE user_id = $1',
+      [userId],
+    )
+    return result.rows[0].total
   },
 
   async findByIdAndUser(id: string, userId: string): Promise<FinancialGoal | null> {

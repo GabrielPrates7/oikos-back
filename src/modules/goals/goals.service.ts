@@ -1,4 +1,5 @@
 import { ConflictError, NotFoundError } from '../../errors/AppError.js'
+import type { PaginatedList, PaginationParams } from '../../utils/pagination.js'
 import { contributionsRepository } from './contributions.repository.js'
 import type { GoalContribution } from './contributions.types.js'
 import { goalsRepository } from './goals.repository.js'
@@ -18,15 +19,22 @@ export const goalsService = {
     return goalsRepository.create(userId, data)
   },
 
-  async listByUser(userId: string): Promise<GoalWithProgress[]> {
-    const goals = await goalsRepository.findAllByUser(userId)
-    return Promise.all(
+  async listByUser(
+    userId: string,
+    pagination: PaginationParams,
+  ): Promise<PaginatedList<GoalWithProgress>> {
+    const [goals, total] = await Promise.all([
+      goalsRepository.findAllByUser(userId, pagination),
+      goalsRepository.countByUser(userId),
+    ])
+    const items = await Promise.all(
       goals.map(async (goal) => {
         const contributions = await contributionsRepository.findAllByGoal(goal.id)
         const currentAmountCents = contributions.reduce((sum, c) => sum + c.amount_cents, 0)
         return { ...goal, currentAmountCents }
       }),
     )
+    return { items, total, page: pagination.page, pageSize: pagination.pageSize }
   },
 
   async getDetail(userId: string, goalId: string): Promise<GoalDetail> {

@@ -1,4 +1,5 @@
 import { pool } from '../../config/database.js'
+import type { PaginationParams } from '../../utils/pagination.js'
 import type { CreateCategoryInput, UpdateCategoryInput } from './categories.schema.js'
 import type { Category, CategoryType } from './categories.types.js'
 
@@ -13,20 +14,49 @@ export const categoriesRepository = {
     return result.rows[0]
   },
 
-  async findAllVisibleToUser(userId: string, type?: CategoryType): Promise<Category[]> {
+  // pagination é opcional de propósito, mesmo padrão dos outros módulos paginados — hoje
+  // nada mais no backend chama findAllVisibleToUser sem paginar (nenhuma validação interna
+  // usa isso, elas checam uma categoria por vez via findByIdVisibleToUser), mas mantém a
+  // mesma garantia caso apareça um consumidor futuro que precise do conjunto inteiro.
+  async findAllVisibleToUser(
+    userId: string,
+    type?: CategoryType,
+    pagination?: PaginationParams,
+  ): Promise<Category[]> {
+    const values: unknown[] = [userId]
+    let typeClause = ''
     if (type) {
-      const result = await pool.query<Category>(
-        `SELECT * FROM categories WHERE (user_id = $1 OR user_id IS NULL) AND type = $2 ORDER BY name`,
-        [userId, type],
-      )
-      return result.rows
+      values.push(type)
+      typeClause = ` AND type = $${values.length}`
+    }
+    let limitClause = ''
+    if (pagination) {
+      const limitIndex = values.push(pagination.pageSize)
+      const offsetIndex = values.push((pagination.page - 1) * pagination.pageSize)
+      limitClause = ` LIMIT $${limitIndex} OFFSET $${offsetIndex}`
     }
 
     const result = await pool.query<Category>(
-      `SELECT * FROM categories WHERE user_id = $1 OR user_id IS NULL ORDER BY name`,
-      [userId],
+      `SELECT * FROM categories WHERE (user_id = $1 OR user_id IS NULL)${typeClause} ORDER BY name${limitClause}`,
+      values,
     )
     return result.rows
+  },
+
+  // Mesmo filtro de findAllVisibleToUser, sem LIMIT/OFFSET — só contagem, categorias não
+  // têm "total exibido".
+  async countVisibleToUser(userId: string, type?: CategoryType): Promise<number> {
+    const values: unknown[] = [userId]
+    let typeClause = ''
+    if (type) {
+      values.push(type)
+      typeClause = ` AND type = $${values.length}`
+    }
+    const result = await pool.query<{ total: number }>(
+      `SELECT COUNT(*)::int AS total FROM categories WHERE (user_id = $1 OR user_id IS NULL)${typeClause}`,
+      values,
+    )
+    return result.rows[0].total
   },
 
   async findByIdVisibleToUser(id: string, userId: string): Promise<Category | null> {

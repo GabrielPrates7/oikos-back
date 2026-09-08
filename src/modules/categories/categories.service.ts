@@ -1,4 +1,5 @@
 import { ConflictError, NotFoundError } from '../../errors/AppError.js'
+import type { PaginatedList, PaginationParams } from '../../utils/pagination.js'
 import { isForeignKeyViolation } from '../../utils/postgres.js'
 import { categoriesRepository } from './categories.repository.js'
 import type { CreateCategoryInput, UpdateCategoryInput } from './categories.schema.js'
@@ -11,16 +12,24 @@ export const categoriesService = {
     return categoriesRepository.create(userId, data)
   },
 
-  async listVisibleToUser(userId: string, type?: CategoryType): Promise<CategoryWithUsage[]> {
-    const categories = await categoriesRepository.findAllVisibleToUser(userId, type)
-    // N+1 aceitável aqui — mesma lógica de accounts.service.listByUser: é a lista de
-    // categorias visíveis a um único usuário (tipicamente poucas dezenas de linhas).
-    return Promise.all(
+  async listVisibleToUser(
+    userId: string,
+    type: CategoryType | undefined,
+    pagination: PaginationParams,
+  ): Promise<PaginatedList<CategoryWithUsage>> {
+    const [categories, total] = await Promise.all([
+      categoriesRepository.findAllVisibleToUser(userId, type, pagination),
+      categoriesRepository.countVisibleToUser(userId, type),
+    ])
+    // N+1 aceitável aqui — mesma lógica de accounts.service.listByUser: é uma página de
+    // categorias visíveis a um único usuário (no máximo pageSize linhas).
+    const items = await Promise.all(
       categories.map(async (category) => {
         const usageCount = await categoriesRepository.countUsage(category.id, userId)
         return { ...category, usageCount }
       }),
     )
+    return { items, total, page: pagination.page, pageSize: pagination.pageSize }
   },
 
   async getVisibleById(id: string, userId: string): Promise<Category> {

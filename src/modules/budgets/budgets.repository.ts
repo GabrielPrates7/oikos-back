@@ -1,5 +1,6 @@
 import { pool } from '../../config/database.js'
 import { monthRange } from '../../utils/date-range.js'
+import type { PaginationParams } from '../../utils/pagination.js'
 import type { CreateBudgetInput, UpdateBudgetInput } from './budgets.schema.js'
 import type { Budget } from './budgets.types.js'
 
@@ -15,13 +16,37 @@ export const budgetsRepository = {
     return result.rows[0]
   },
 
-  async findAllByUserAndMonth(userId: string, referenceMonth: string): Promise<Budget[]> {
+  // pagination é opcional de propósito, mesmo padrão dos outros módulos paginados — hoje
+  // nada mais no backend chama isso sem paginar.
+  async findAllByUserAndMonth(
+    userId: string,
+    referenceMonth: string,
+    pagination?: PaginationParams,
+  ): Promise<Budget[]> {
     const { monthStart } = monthRange(referenceMonth)
+    const values: unknown[] = [userId, monthStart]
+    let limitClause = ''
+    if (pagination) {
+      const limitIndex = values.push(pagination.pageSize)
+      const offsetIndex = values.push((pagination.page - 1) * pagination.pageSize)
+      limitClause = ` LIMIT $${limitIndex} OFFSET $${offsetIndex}`
+    }
     const result = await pool.query<Budget>(
-      `SELECT * FROM budgets WHERE user_id = $1 AND reference_month = $2 ORDER BY created_at`,
-      [userId, monthStart],
+      `SELECT * FROM budgets WHERE user_id = $1 AND reference_month = $2 ORDER BY created_at${limitClause}`,
+      values,
     )
     return result.rows
+  },
+
+  // Mesmo filtro de findAllByUserAndMonth, sem LIMIT/OFFSET — só contagem, orçamentos não
+  // têm "total exibido".
+  async countByUserAndMonth(userId: string, referenceMonth: string): Promise<number> {
+    const { monthStart } = monthRange(referenceMonth)
+    const result = await pool.query<{ total: number }>(
+      `SELECT COUNT(*)::int AS total FROM budgets WHERE user_id = $1 AND reference_month = $2`,
+      [userId, monthStart],
+    )
+    return result.rows[0].total
   },
 
   async findByIdAndUser(id: string, userId: string): Promise<Budget | null> {
