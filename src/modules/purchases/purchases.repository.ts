@@ -12,8 +12,8 @@ export const purchasesRepository = {
   // Fase 11: só criação, sempre dentro da transação de purchases.service.
   async create(client: PoolClient, userId: string, data: CreatePurchaseInput): Promise<Purchase> {
     const result = await client.query<Purchase>(
-      `INSERT INTO purchases (user_id, credit_card_id, category_id, description, total_amount_cents, installments_count, purchase_date, is_essential, is_fixed)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO purchases (user_id, credit_card_id, category_id, description, total_amount_cents, installments_count, purchase_date, is_essential, is_fixed, is_planned)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
       [
         userId,
@@ -25,6 +25,7 @@ export const purchasesRepository = {
         data.purchase_date,
         data.is_essential,
         data.is_fixed,
+        data.is_planned,
       ],
     )
     return result.rows[0]

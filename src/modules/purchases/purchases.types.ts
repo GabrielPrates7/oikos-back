@@ -9,6 +9,7 @@ export interface Purchase {
   purchase_date: string
   is_essential: boolean
   is_fixed: boolean
+  is_planned: boolean
   created_at: Date
 }
 

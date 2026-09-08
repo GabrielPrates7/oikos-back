@@ -10,6 +10,7 @@ export const createPurchaseSchema = z.object({
   purchase_date: isoDateSchema,
   is_essential: z.boolean(),
   is_fixed: z.boolean(),
+  is_planned: z.boolean(),
 })
 
 // Campos estruturais (credit_card_id, total_amount_cents, installments_count,
