@@ -5,10 +5,17 @@ import type { Account, AccountStatus } from './accounts.types.js'
 export const accountsRepository = {
   async create(userId: string, data: CreateAccountInput): Promise<Account> {
     const result = await pool.query<Account>(
-      `INSERT INTO accounts (user_id, name, bank_name, type, initial_balance_cents)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO accounts (user_id, name, bank_name, type, initial_balance_cents, color)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [userId, data.name, data.bank_name ?? null, data.type, data.initial_balance_cents],
+      [
+        userId,
+        data.name,
+        data.bank_name ?? null,
+        data.type,
+        data.initial_balance_cents,
+        data.color ?? null,
+      ],
     )
     return result.rows[0]
   },
@@ -57,6 +64,10 @@ export const accountsRepository = {
     if (data.initial_balance_cents !== undefined) {
       fields.push(`initial_balance_cents = $${index++}`)
       values.push(data.initial_balance_cents)
+    }
+    if (data.color !== undefined) {
+      fields.push(`color = $${index++}`)
+      values.push(data.color)
     }
 
     if (fields.length === 0) {

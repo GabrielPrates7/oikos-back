@@ -9,6 +9,11 @@ export const createAccountSchema = z.object({
   bank_name: z.string().optional(),
   type: accountTypeSchema,
   initial_balance_cents: z.number().int(),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, 'cor deve estar no formato hex, ex: #8257E5')
+    .nullable()
+    .optional(),
 })
 
 export const updateAccountSchema = createAccountSchema.partial()
