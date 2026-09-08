@@ -4,9 +4,15 @@ import { paginationQuerySchema } from '../../utils/pagination.js'
 import { payInvoiceSchema } from './invoices.schema.js'
 import { invoicesService } from './invoices.service.js'
 
+// 'all' = sem filtro de mês; 'YYYY-MM' = mês exato; ausente = padrão (mês atual + não paga
+// de mês anterior), resolvido dentro de invoices.repository.buildWhere.
+const monthQuerySchema = z.union([z.literal('all'), z.string().regex(/^\d{4}-\d{2}$/)])
+
 const listQuerySchema = z.object({
   creditCardId: z.string().uuid().optional(),
   search: z.string().trim().min(1).optional(),
+  month: monthQuerySchema.optional(),
+  sort: z.enum(['value_asc', 'value_desc']).default('value_desc'),
   ...paginationQuerySchema,
 })
 
@@ -15,11 +21,12 @@ const idParamsSchema = z.object({
 })
 
 export async function list(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  const { creditCardId, search, page, pageSize } = listQuerySchema.parse(request.query)
+  const { creditCardId, search, month, sort, page, pageSize } = listQuerySchema.parse(request.query)
   const result = await invoicesService.listForUser(
     request.user!.id,
-    { creditCardId, search },
+    { creditCardId, search, month },
     { page, pageSize },
+    sort,
   )
   reply.send({
     invoices: result.items,

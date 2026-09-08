@@ -3,13 +3,20 @@ import { pool } from '../../config/database.js'
 import type { PaginationParams } from '../../utils/pagination.js'
 import type { Invoice, InvoiceItem, InvoiceWithTotal } from './invoices.types.js'
 
+export type InvoiceSort = 'value_asc' | 'value_desc'
+
+export interface InvoiceListFilters {
+  creditCardId?: string
+  search?: string
+  // undefined = "padrão" (mês atual OU mês anterior não paga — mesma regra que já existia
+  // no filtro client-side); 'all' = sem filtro de mês; 'YYYY-MM' = mês exato.
+  month?: string
+}
+
 // Compartilhado entre findAllByUser (paginada) e getFilteredSum (agregada, sem
 // LIMIT/OFFSET) — as duas precisam do EXATO mesmo WHERE, senão o total/soma não bate com
 // as linhas realmente listadas em alguma página.
-function buildWhere(
-  userId: string,
-  filters: { creditCardId?: string; search?: string },
-): { where: string; values: unknown[] } {
+function buildWhere(userId: string, filters: InvoiceListFilters): { where: string; values: unknown[] } {
   const conditions = ['cc.user_id = $1']
   const values: unknown[] = [userId]
 
@@ -27,7 +34,27 @@ function buildWhere(
     )`)
   }
 
+  // status != 'paid' basta pra "não paga" aqui: computeDisplayStatus só devolve 'paid'
+  // quando o status bruto já é 'paid' (nunca é derivado de data) — ver invoice-status.util.
+  if (filters.month === undefined) {
+    conditions.push(`(
+      i.reference_month = date_trunc('month', CURRENT_DATE)::date
+      OR (i.reference_month < date_trunc('month', CURRENT_DATE)::date AND i.status != 'paid')
+    )`)
+  } else if (filters.month !== 'all') {
+    values.push(`${filters.month}-01`)
+    conditions.push(`i.reference_month = $${values.length}::date`)
+  }
+
   return { where: conditions.join(' AND '), values }
+}
+
+function buildOrderBy(sort: InvoiceSort): string {
+  // total_cents é o alias calculado no próprio SELECT (subquery correlacionada) — Postgres
+  // aceita ORDER BY por alias de coluna da mesma query. reference_month DESC como
+  // desempate, mesma ordem que já existia antes do sort por valor existir.
+  const direction = sort === 'value_asc' ? 'ASC' : 'DESC'
+  return `total_cents ${direction}, i.reference_month DESC`
 }
 
 export const invoicesRepository = {
@@ -65,8 +92,9 @@ export const invoicesRepository = {
   // apareça um consumidor interno (relatório, extrato) que precise do conjunto inteiro.
   async findAllByUser(
     userId: string,
-    filters: { creditCardId?: string; search?: string } = {},
+    filters: InvoiceListFilters = {},
     pagination?: PaginationParams,
+    sort: InvoiceSort = 'value_desc',
   ): Promise<InvoiceWithTotal[]> {
     const { where, values } = buildWhere(userId, filters)
     let limitClause = ''
@@ -86,18 +114,18 @@ export const invoicesRepository = {
        FROM invoices i
        JOIN credit_cards cc ON cc.id = i.credit_card_id
        WHERE ${where}
-       ORDER BY i.reference_month DESC${limitClause}`,
+       ORDER BY ${buildOrderBy(sort)}${limitClause}`,
       values,
     )
     return result.rows
   },
 
-  // Mesmo WHERE de findAllByUser, sem LIMIT/OFFSET — total (contagem de faturas) e sumCents
-  // (soma dos total_cents de cada fatura, mesma subquery correlacionada da listagem) num
-  // único round-trip.
+  // Mesmo WHERE de findAllByUser, sem LIMIT/OFFSET (e sem ORDER BY — não importa pra
+  // agregação) — total (contagem de faturas) e sumCents (soma dos total_cents de cada
+  // fatura, mesma subquery correlacionada da listagem) num único round-trip.
   async getFilteredSum(
     userId: string,
-    filters: { creditCardId?: string; search?: string } = {},
+    filters: InvoiceListFilters = {},
   ): Promise<{ total: number; sumCents: number }> {
     const { where, values } = buildWhere(userId, filters)
     const result = await pool.query<{ total: number; sum_cents: number }>(

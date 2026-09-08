@@ -75,13 +75,18 @@ export const incomeEntriesRepository = {
 
   // Mesmo WHERE de findAllByUser, sem LIMIT/OFFSET — total (contagem) e sumCents (soma) num
   // único round-trip, já que os dois agregam sobre o mesmo conjunto de linhas filtrado.
+  // total conta TODAS as linhas (bate com a paginação, pendente incluída); sumCents só soma
+  // as recebidas (CASE WHEN, não filtro no WHERE) — mesmo critério que ListTotal aplicava no
+  // cliente antes da paginação existir (pendente não conta até virar recebida de verdade).
   async getFilteredSum(
     userId: string,
     filters: IncomeEntryFilters = {},
   ): Promise<{ total: number; sumCents: number }> {
     const { where, values } = buildWhere(userId, filters)
     const result = await pool.query<{ total: number; sum_cents: number }>(
-      `SELECT COUNT(*)::int AS total, COALESCE(SUM(amount_cents), 0)::int AS sum_cents
+      `SELECT
+         COUNT(*)::int AS total,
+         COALESCE(SUM(CASE WHEN is_received THEN amount_cents ELSE 0 END), 0)::int AS sum_cents
        FROM income_entries WHERE ${where}`,
       values,
     )

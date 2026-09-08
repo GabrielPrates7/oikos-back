@@ -8,6 +8,7 @@ import { invoicePaymentsRepository } from '../invoice-payments/invoice-payments.
 import type { InvoicePayment } from '../invoice-payments/invoice-payments.types.js'
 import { computeDisplayStatus } from './invoice-status.util.js'
 import { invoicesRepository } from './invoices.repository.js'
+import type { InvoiceListFilters, InvoiceSort } from './invoices.repository.js'
 import type { PayInvoiceInput } from './invoices.schema.js'
 import type { Invoice, InvoiceItem } from './invoices.types.js'
 
@@ -42,11 +43,12 @@ function withDisplayStatus(invoice: Invoice): InvoiceWithDisplayStatus {
 export const invoicesService = {
   async listForUser(
     userId: string,
-    filters: { creditCardId?: string; search?: string } = {},
+    filters: InvoiceListFilters = {},
     pagination: PaginationParams,
+    sort: InvoiceSort = 'value_desc',
   ): Promise<PaginatedResult<InvoiceListItem>> {
     const [invoices, { total, sumCents }] = await Promise.all([
-      invoicesRepository.findAllByUser(userId, filters, pagination),
+      invoicesRepository.findAllByUser(userId, filters, pagination, sort),
       invoicesRepository.getFilteredSum(userId, filters),
     ])
     const items = invoices.map(({ total_cents, ...invoice }) => ({
