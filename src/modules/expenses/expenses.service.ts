@@ -1,6 +1,7 @@
 import { AppError, ConflictError, NotFoundError } from '../../errors/AppError.js'
 import { accountsRepository } from '../accounts/accounts.repository.js'
 import { categoriesRepository } from '../categories/categories.repository.js'
+import type { PaginatedResult, PaginationParams } from '../../utils/pagination.js'
 import { expensesRepository } from './expenses.repository.js'
 import type { ExpenseFilters } from './expenses.repository.js'
 import type { CreateExpenseInput, UpdateExpenseInput } from './expenses.schema.js'
@@ -45,8 +46,16 @@ export const expensesService = {
     return expensesRepository.create(userId, data)
   },
 
-  async listByUser(userId: string, filters: ExpenseFilters): Promise<Expense[]> {
-    return expensesRepository.findAllByUser(userId, filters)
+  async listByUser(
+    userId: string,
+    filters: ExpenseFilters,
+    pagination: PaginationParams,
+  ): Promise<PaginatedResult<Expense>> {
+    const [items, { total, sumCents }] = await Promise.all([
+      expensesRepository.findAllByUser(userId, filters, pagination),
+      expensesRepository.getFilteredSum(userId, filters),
+    ])
+    return { items, total, sumCents, page: pagination.page, pageSize: pagination.pageSize }
   },
 
   async getById(id: string, userId: string): Promise<Expense> {

@@ -1,6 +1,7 @@
 import type { PoolClient } from 'pg'
 import { pool } from '../../config/database.js'
 import { AppError, ConflictError, NotFoundError } from '../../errors/AppError.js'
+import type { PaginatedResult, PaginationParams } from '../../utils/pagination.js'
 import { isUniqueViolation } from '../../utils/postgres.js'
 import { accountsRepository } from '../accounts/accounts.repository.js'
 import { invoicePaymentsRepository } from '../invoice-payments/invoice-payments.repository.js'
@@ -42,12 +43,17 @@ export const invoicesService = {
   async listForUser(
     userId: string,
     filters: { creditCardId?: string; search?: string } = {},
-  ): Promise<InvoiceListItem[]> {
-    const invoices = await invoicesRepository.findAllByUser(userId, filters)
-    return invoices.map(({ total_cents, ...invoice }) => ({
+    pagination: PaginationParams,
+  ): Promise<PaginatedResult<InvoiceListItem>> {
+    const [invoices, { total, sumCents }] = await Promise.all([
+      invoicesRepository.findAllByUser(userId, filters, pagination),
+      invoicesRepository.getFilteredSum(userId, filters),
+    ])
+    const items = invoices.map(({ total_cents, ...invoice }) => ({
       ...withDisplayStatus(invoice),
       totalCents: total_cents,
     }))
+    return { items, total, sumCents, page: pagination.page, pageSize: pagination.pageSize }
   },
 
   async getDetail(

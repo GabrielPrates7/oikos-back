@@ -1,4 +1,5 @@
 import { pool } from '../../config/database.js'
+import type { PaginationParams } from '../../utils/pagination.js'
 import type { CreateExpenseInput, UpdateExpenseInput } from './expenses.schema.js'
 import type { Expense } from './expenses.types.js'
 
@@ -8,6 +9,25 @@ export interface ExpenseFilters {
   paymentMethod?: string
   dateFrom?: string
   dateTo?: string
+}
+
+// Compartilhado entre findAllByUser (paginada) e getFilteredSum (agregada, sem
+// LIMIT/OFFSET) — as duas precisam do EXATO mesmo WHERE, senão o total/soma não bate com
+// as linhas realmente listadas em alguma página.
+function buildWhere(userId: string, filters: ExpenseFilters): { where: string; values: unknown[] } {
+  const optionalFilters: [string, string | undefined][] = [
+    ['account_id = ', filters.accountId],
+    ['category_id = ', filters.categoryId],
+    ['payment_method = ', filters.paymentMethod],
+    ['expense_date >= ', filters.dateFrom],
+    ['expense_date <= ', filters.dateTo],
+  ]
+  const active = optionalFilters.filter((entry): entry is [string, string] => entry[1] !== undefined)
+
+  const conditions = ['user_id = $1', ...active.map(([clause], i) => `${clause}$${i + 2}`)]
+  const values: unknown[] = [userId, ...active.map(([, value]) => value)]
+
+  return { where: conditions.join(' AND '), values }
 }
 
 export const expensesRepository = {
@@ -34,26 +54,42 @@ export const expensesRepository = {
     return result.rows[0]
   },
 
-  async findAllByUser(userId: string, filters: ExpenseFilters = {}): Promise<Expense[]> {
-    const optionalFilters: [string, string | undefined][] = [
-      ['account_id = ', filters.accountId],
-      ['category_id = ', filters.categoryId],
-      ['payment_method = ', filters.paymentMethod],
-      ['expense_date >= ', filters.dateFrom],
-      ['expense_date <= ', filters.dateTo],
-    ]
-    const active = optionalFilters.filter(
-      (entry): entry is [string, string] => entry[1] !== undefined,
-    )
-
-    const conditions = ['user_id = $1', ...active.map(([clause], i) => `${clause}$${i + 2}`)]
-    const values: unknown[] = [userId, ...active.map(([, value]) => value)]
+  // pagination é opcional de propósito: accounts.service.getStatement chama isso sem
+  // paginar (precisa de TODAS as linhas do período pra montar o extrato com saldo
+  // corrente) — só o controller de listagem (expenses.controller) passa page/pageSize.
+  async findAllByUser(
+    userId: string,
+    filters: ExpenseFilters = {},
+    pagination?: PaginationParams,
+  ): Promise<Expense[]> {
+    const { where, values } = buildWhere(userId, filters)
+    let limitClause = ''
+    if (pagination) {
+      const limitIndex = values.push(pagination.pageSize)
+      const offsetIndex = values.push((pagination.page - 1) * pagination.pageSize)
+      limitClause = ` LIMIT $${limitIndex} OFFSET $${offsetIndex}`
+    }
 
     const result = await pool.query<Expense>(
-      `SELECT * FROM expenses WHERE ${conditions.join(' AND ')} ORDER BY expense_date DESC, created_at DESC`,
+      `SELECT * FROM expenses WHERE ${where} ORDER BY expense_date DESC, created_at DESC${limitClause}`,
       values,
     )
     return result.rows
+  },
+
+  // Mesmo WHERE de findAllByUser, sem LIMIT/OFFSET — total (contagem) e sumCents (soma) num
+  // único round-trip, já que os dois agregam sobre o mesmo conjunto de linhas filtrado.
+  async getFilteredSum(
+    userId: string,
+    filters: ExpenseFilters = {},
+  ): Promise<{ total: number; sumCents: number }> {
+    const { where, values } = buildWhere(userId, filters)
+    const result = await pool.query<{ total: number; sum_cents: number }>(
+      `SELECT COUNT(*)::int AS total, COALESCE(SUM(amount_cents), 0)::int AS sum_cents
+       FROM expenses WHERE ${where}`,
+      values,
+    )
+    return { total: result.rows[0].total, sumCents: result.rows[0].sum_cents }
   },
 
   async findByIdAndUser(id: string, userId: string): Promise<Expense | null> {

@@ -1,5 +1,6 @@
 import { AppError, ConflictError, NotFoundError } from '../../errors/AppError.js'
 import { accountsRepository } from '../accounts/accounts.repository.js'
+import type { PaginatedResult, PaginationParams } from '../../utils/pagination.js'
 import { transfersRepository } from './transfers.repository.js'
 import type { TransferFilters } from './transfers.repository.js'
 import type { CreateTransferInput } from './transfers.schema.js'
@@ -41,8 +42,16 @@ export const transfersService = {
     return transfersRepository.create(userId, data)
   },
 
-  async listByUser(userId: string, filters: TransferFilters): Promise<Transfer[]> {
-    return transfersRepository.findAllByUser(userId, filters)
+  async listByUser(
+    userId: string,
+    filters: TransferFilters,
+    pagination: PaginationParams,
+  ): Promise<PaginatedResult<Transfer>> {
+    const [items, { total, sumCents }] = await Promise.all([
+      transfersRepository.findAllByUser(userId, filters, pagination),
+      transfersRepository.getFilteredSum(userId, filters),
+    ])
+    return { items, total, sumCents, page: pagination.page, pageSize: pagination.pageSize }
   },
 
   async getById(id: string, userId: string): Promise<Transfer> {

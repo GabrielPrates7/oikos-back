@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
+import { paginationQuerySchema } from '../../utils/pagination.js'
 import { isoDateSchema } from '../../utils/validation.js'
 import { createExpenseSchema, paymentMethodSchema, updateExpenseSchema } from './expenses.schema.js'
 import { expensesService } from './expenses.service.js'
@@ -10,6 +11,7 @@ const listQuerySchema = z.object({
   paymentMethod: paymentMethodSchema.optional(),
   from: isoDateSchema.optional(),
   to: isoDateSchema.optional(),
+  ...paginationQuerySchema,
 })
 
 const idParamsSchema = z.object({
@@ -18,14 +20,24 @@ const idParamsSchema = z.object({
 
 export async function list(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const query = listQuerySchema.parse(request.query)
-  const expenses = await expensesService.listByUser(request.user!.id, {
-    accountId: query.accountId,
-    categoryId: query.categoryId,
-    paymentMethod: query.paymentMethod,
-    dateFrom: query.from,
-    dateTo: query.to,
+  const result = await expensesService.listByUser(
+    request.user!.id,
+    {
+      accountId: query.accountId,
+      categoryId: query.categoryId,
+      paymentMethod: query.paymentMethod,
+      dateFrom: query.from,
+      dateTo: query.to,
+    },
+    { page: query.page, pageSize: query.pageSize },
+  )
+  reply.send({
+    expenses: result.items,
+    total: result.total,
+    sumCents: result.sumCents,
+    page: result.page,
+    pageSize: result.pageSize,
   })
-  reply.send({ expenses })
 }
 
 export async function create(request: FastifyRequest, reply: FastifyReply): Promise<void> {

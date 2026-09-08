@@ -1,11 +1,13 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
+import { paginationQuerySchema } from '../../utils/pagination.js'
 import { payInvoiceSchema } from './invoices.schema.js'
 import { invoicesService } from './invoices.service.js'
 
 const listQuerySchema = z.object({
   creditCardId: z.string().uuid().optional(),
   search: z.string().trim().min(1).optional(),
+  ...paginationQuerySchema,
 })
 
 const idParamsSchema = z.object({
@@ -13,9 +15,19 @@ const idParamsSchema = z.object({
 })
 
 export async function list(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  const { creditCardId, search } = listQuerySchema.parse(request.query)
-  const invoices = await invoicesService.listForUser(request.user!.id, { creditCardId, search })
-  reply.send({ invoices })
+  const { creditCardId, search, page, pageSize } = listQuerySchema.parse(request.query)
+  const result = await invoicesService.listForUser(
+    request.user!.id,
+    { creditCardId, search },
+    { page, pageSize },
+  )
+  reply.send({
+    invoices: result.items,
+    total: result.total,
+    sumCents: result.sumCents,
+    page: result.page,
+    pageSize: result.pageSize,
+  })
 }
 
 export async function getById(request: FastifyRequest, reply: FastifyReply): Promise<void> {

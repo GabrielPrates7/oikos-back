@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
+import { paginationQuerySchema } from '../../utils/pagination.js'
 import { isoDateSchema } from '../../utils/validation.js'
 import { createIncomeEntrySchema, updateIncomeEntrySchema } from './income-entries.schema.js'
 import { incomeEntriesService } from './income-entries.service.js'
@@ -9,6 +10,7 @@ const listQuerySchema = z.object({
   categoryId: z.string().uuid().optional(),
   from: isoDateSchema.optional(),
   to: isoDateSchema.optional(),
+  ...paginationQuerySchema,
 })
 
 const idParamsSchema = z.object({
@@ -17,13 +19,18 @@ const idParamsSchema = z.object({
 
 export async function list(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const query = listQuerySchema.parse(request.query)
-  const incomeEntries = await incomeEntriesService.listByUser(request.user!.id, {
-    accountId: query.accountId,
-    categoryId: query.categoryId,
-    dateFrom: query.from,
-    dateTo: query.to,
+  const result = await incomeEntriesService.listByUser(
+    request.user!.id,
+    { accountId: query.accountId, categoryId: query.categoryId, dateFrom: query.from, dateTo: query.to },
+    { page: query.page, pageSize: query.pageSize },
+  )
+  reply.send({
+    incomeEntries: result.items,
+    total: result.total,
+    sumCents: result.sumCents,
+    page: result.page,
+    pageSize: result.pageSize,
   })
-  reply.send({ incomeEntries })
 }
 
 export async function create(request: FastifyRequest, reply: FastifyReply): Promise<void> {

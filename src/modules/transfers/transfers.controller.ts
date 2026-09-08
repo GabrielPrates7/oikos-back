@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
+import { paginationQuerySchema } from '../../utils/pagination.js'
 import { isoDateSchema } from '../../utils/validation.js'
 import { createTransferSchema } from './transfers.schema.js'
 import { transfersService } from './transfers.service.js'
@@ -8,6 +9,7 @@ const listQuerySchema = z.object({
   accountId: z.string().uuid().optional(),
   from: isoDateSchema.optional(),
   to: isoDateSchema.optional(),
+  ...paginationQuerySchema,
 })
 
 const idParamsSchema = z.object({
@@ -16,12 +18,18 @@ const idParamsSchema = z.object({
 
 export async function list(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const query = listQuerySchema.parse(request.query)
-  const transfers = await transfersService.listByUser(request.user!.id, {
-    accountId: query.accountId,
-    dateFrom: query.from,
-    dateTo: query.to,
+  const result = await transfersService.listByUser(
+    request.user!.id,
+    { accountId: query.accountId, dateFrom: query.from, dateTo: query.to },
+    { page: query.page, pageSize: query.pageSize },
+  )
+  reply.send({
+    transfers: result.items,
+    total: result.total,
+    sumCents: result.sumCents,
+    page: result.page,
+    pageSize: result.pageSize,
   })
-  reply.send({ transfers })
 }
 
 export async function create(request: FastifyRequest, reply: FastifyReply): Promise<void> {

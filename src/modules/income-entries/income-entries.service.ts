@@ -1,6 +1,7 @@
 import { accountsRepository } from '../accounts/accounts.repository.js'
 import { categoriesRepository } from '../categories/categories.repository.js'
 import { AppError, ConflictError, NotFoundError } from '../../errors/AppError.js'
+import type { PaginatedResult, PaginationParams } from '../../utils/pagination.js'
 import { incomeEntriesRepository } from './income-entries.repository.js'
 import type { IncomeEntryFilters } from './income-entries.repository.js'
 import type { CreateIncomeEntryInput, UpdateIncomeEntryInput } from './income-entries.schema.js'
@@ -33,8 +34,16 @@ export const incomeEntriesService = {
     return incomeEntriesRepository.create(userId, data)
   },
 
-  async listByUser(userId: string, filters: IncomeEntryFilters): Promise<IncomeEntry[]> {
-    return incomeEntriesRepository.findAllByUser(userId, filters)
+  async listByUser(
+    userId: string,
+    filters: IncomeEntryFilters,
+    pagination: PaginationParams,
+  ): Promise<PaginatedResult<IncomeEntry>> {
+    const [items, { total, sumCents }] = await Promise.all([
+      incomeEntriesRepository.findAllByUser(userId, filters, pagination),
+      incomeEntriesRepository.getFilteredSum(userId, filters),
+    ])
+    return { items, total, sumCents, page: pagination.page, pageSize: pagination.pageSize }
   },
 
   async getById(id: string, userId: string): Promise<IncomeEntry> {
