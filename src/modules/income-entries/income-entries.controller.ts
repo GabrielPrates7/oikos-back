@@ -1,15 +1,22 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
+import { currentMonthString, monthRange } from '../../utils/date-range.js'
 import { paginationQuerySchema } from '../../utils/pagination.js'
 import { isoDateSchema } from '../../utils/validation.js'
 import { createIncomeEntrySchema, updateIncomeEntrySchema } from './income-entries.schema.js'
 import { incomeEntriesService } from './income-entries.service.js'
+
+// Mesmo padrão de expenses.controller (ver comentário lá): 'all' = sem filtro; 'YYYY-MM' =
+// mês exato; ausente = mês atual. Resolvido aqui, não no repository, por causa do chamador
+// interno accounts.service.getStatement que passa dateFrom/dateTo direto.
+const monthQuerySchema = z.union([z.literal('all'), z.string().regex(/^\d{4}-\d{2}$/)])
 
 const listQuerySchema = z.object({
   accountId: z.string().uuid().optional(),
   categoryId: z.string().uuid().optional(),
   from: isoDateSchema.optional(),
   to: isoDateSchema.optional(),
+  month: monthQuerySchema.optional(),
   ...paginationQuerySchema,
 })
 
@@ -17,11 +24,29 @@ const idParamsSchema = z.object({
   id: z.string().uuid(),
 })
 
+// from/to explícitos sempre ganham do month — mesmo motivo de expenses.controller.
+function resolveDateRange(
+  from: string | undefined,
+  to: string | undefined,
+  month: string | undefined,
+): { dateFrom: string | undefined; dateTo: string | undefined } {
+  if (from !== undefined || to !== undefined) {
+    return { dateFrom: from, dateTo: to }
+  }
+  const effectiveMonth = month ?? currentMonthString()
+  if (effectiveMonth === 'all') {
+    return { dateFrom: undefined, dateTo: undefined }
+  }
+  const { monthStart, monthEnd } = monthRange(effectiveMonth)
+  return { dateFrom: monthStart, dateTo: monthEnd }
+}
+
 export async function list(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const query = listQuerySchema.parse(request.query)
+  const { dateFrom, dateTo } = resolveDateRange(query.from, query.to, query.month)
   const result = await incomeEntriesService.listByUser(
     request.user!.id,
-    { accountId: query.accountId, categoryId: query.categoryId, dateFrom: query.from, dateTo: query.to },
+    { accountId: query.accountId, categoryId: query.categoryId, dateFrom, dateTo },
     { page: query.page, pageSize: query.pageSize },
   )
   reply.send({

@@ -1,7 +1,14 @@
 import { pool } from '../../config/database.js'
+import { monthRange } from '../../utils/date-range.js'
 import type { PaginationParams } from '../../utils/pagination.js'
 import type { CreateExpenseInput, UpdateExpenseInput } from './expenses.schema.js'
 import type { Expense } from './expenses.types.js'
+
+export interface MonthlySummary {
+  totalGeralCents: number
+  totalPagoCents: number
+  totalFaltaPagarCents: number
+}
 
 export interface ExpenseFilters {
   accountId?: string
@@ -129,5 +136,53 @@ export const expensesRepository = {
       userId,
     ])
     return (result.rowCount ?? 0) > 0
+  },
+
+  // totalPagoCents soma despesas pagas + pagamentos de fatura com due_date no mês;
+  // totalFaltaPagarCents soma despesas pendentes + faturas ainda não pagas com due_date no
+  // mês (valor total da fatura, via installments — mesmo padrão de
+  // dashboard.repository.getTotalUnpaidInvoices). Faturas são escopadas por cc.user_id (dono
+  // do cartão), não pela conta que paga — mesma convenção de getTotalUnpaidInvoices, pra
+  // ficar consistente entre as duas faces (paga/a pagar) da mesma fatura.
+  async getMonthlySummary(userId: string, month: string): Promise<MonthlySummary> {
+    const range = month === 'all' ? null : monthRange(month)
+    const dateParams = range ? [userId, range.monthStart, range.monthEnd] : [userId]
+
+    const expensesResult = await pool.query<{ paid_cents: number; pending_cents: number }>(
+      `SELECT
+         COALESCE(SUM(CASE WHEN is_paid THEN amount_cents ELSE 0 END), 0)::int AS paid_cents,
+         COALESCE(SUM(CASE WHEN NOT is_paid THEN amount_cents ELSE 0 END), 0)::int AS pending_cents
+       FROM expenses
+       WHERE user_id = $1${range ? ' AND expense_date BETWEEN $2 AND $3' : ''}`,
+      dateParams,
+    )
+
+    const paidInvoicesResult = await pool.query<{ total_cents: number }>(
+      `SELECT COALESCE(SUM(ip.amount_cents), 0)::int AS total_cents
+       FROM invoice_payments ip
+       JOIN invoices inv ON inv.id = ip.invoice_id
+       JOIN credit_cards cc ON cc.id = inv.credit_card_id
+       WHERE cc.user_id = $1${range ? ' AND inv.due_date BETWEEN $2 AND $3' : ''}`,
+      dateParams,
+    )
+
+    const unpaidInvoicesResult = await pool.query<{ total_cents: number }>(
+      `SELECT COALESCE(SUM(ins.amount_cents), 0)::int AS total_cents
+       FROM installments ins
+       JOIN invoices i ON i.id = ins.invoice_id
+       JOIN credit_cards cc ON cc.id = i.credit_card_id
+       WHERE cc.user_id = $1 AND i.status != 'paid'${range ? ' AND i.due_date BETWEEN $2 AND $3' : ''}`,
+      dateParams,
+    )
+
+    const totalPagoCents = expensesResult.rows[0].paid_cents + paidInvoicesResult.rows[0].total_cents
+    const totalFaltaPagarCents =
+      expensesResult.rows[0].pending_cents + unpaidInvoicesResult.rows[0].total_cents
+
+    return {
+      totalPagoCents,
+      totalFaltaPagarCents,
+      totalGeralCents: totalPagoCents + totalFaltaPagarCents,
+    }
   },
 }

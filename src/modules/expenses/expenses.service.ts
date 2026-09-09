@@ -3,7 +3,7 @@ import { accountsRepository } from '../accounts/accounts.repository.js'
 import { categoriesRepository } from '../categories/categories.repository.js'
 import type { PaginatedResult, PaginationParams } from '../../utils/pagination.js'
 import { expensesRepository } from './expenses.repository.js'
-import type { ExpenseFilters } from './expenses.repository.js'
+import type { ExpenseFilters, MonthlySummary } from './expenses.repository.js'
 import type { CreateExpenseInput, UpdateExpenseInput } from './expenses.schema.js'
 import type { Expense } from './expenses.types.js'
 
@@ -86,5 +86,9 @@ export const expensesService = {
     if (!deleted) {
       throw new NotFoundError('despesa não encontrada')
     }
+  },
+
+  async getMonthlySummary(userId: string, month: string): Promise<MonthlySummary> {
+    return expensesRepository.getMonthlySummary(userId, month)
   },
 }
