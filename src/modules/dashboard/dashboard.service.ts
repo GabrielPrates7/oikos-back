@@ -1,6 +1,7 @@
 import { currentMonthString, monthRange } from '../../utils/date-range.js'
 import { accountsRepository } from '../accounts/accounts.repository.js'
 import { creditCardsRepository } from '../credit-cards/credit-cards.repository.js'
+import { expensesRepository } from '../expenses/expenses.repository.js'
 import { dashboardRepository } from './dashboard.repository.js'
 
 function resolveMonthRange(month?: string): {
@@ -53,7 +54,13 @@ export interface DashboardSummary {
     netCents: number
   }
   totalBalanceCents: number
-  totalPendingInvoicesCents: number
+  // Mesmo conceito de expenses.service.getMonthlySummary, só que parametrizado pelo mês que
+  // o Dashboard já resolve (não fixo em "mês atual") — jaPagoCents soma despesas pagas do
+  // mês + faturas pagas com due_date no mês; faltaPagarCents soma despesas pendentes do mês
+  // + faturas não pagas com due_date no mês. Substitui o antigo totalPendingInvoicesCents
+  // (que era global, todas as faturas em aberto de sempre, sem filtro de mês).
+  jaPagoCents: number
+  faltaPagarCents: number
   accounts: AccountSummary[]
   creditCards: CreditCardSummary[]
   expensesByCategory: CategoryExpenseSummary[]
@@ -82,7 +89,8 @@ export const dashboardService = {
       0,
     )
 
-    const totalPendingInvoicesCents = await dashboardRepository.getTotalUnpaidInvoices(userId)
+    const { totalPagoCents: jaPagoCents, totalFaltaPagarCents: faltaPagarCents } =
+      await expensesRepository.getMonthlySummary(userId, resolvedMonth)
 
     const creditCards = await creditCardsRepository.findAllByUser(userId)
     const creditCardSummaries: CreditCardSummary[] = await Promise.all(
@@ -206,7 +214,8 @@ export const dashboardService = {
         netCents,
       },
       totalBalanceCents,
-      totalPendingInvoicesCents,
+      jaPagoCents,
+      faltaPagarCents,
       accounts: accountSummaries,
       creditCards: creditCardSummaries,
       expensesByCategory,

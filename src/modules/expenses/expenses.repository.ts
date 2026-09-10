@@ -140,10 +140,11 @@ export const expensesRepository = {
 
   // totalPagoCents soma despesas pagas + pagamentos de fatura com due_date no mês;
   // totalFaltaPagarCents soma despesas pendentes + faturas ainda não pagas com due_date no
-  // mês (valor total da fatura, via installments — mesmo padrão de
-  // dashboard.repository.getTotalUnpaidInvoices). Faturas são escopadas por cc.user_id (dono
-  // do cartão), não pela conta que paga — mesma convenção de getTotalUnpaidInvoices, pra
-  // ficar consistente entre as duas faces (paga/a pagar) da mesma fatura.
+  // mês (valor total da fatura, via installments). Faturas são escopadas por cc.user_id
+  // (dono do cartão), não pela conta que paga, pra ficar consistente entre as duas faces
+  // (paga/a pagar) da mesma fatura. Também usado por dashboard.service.getSummary (mesmo
+  // conceito de Já pago/Falta pagar, só que parametrizado pelo mês do MonthSwitcher em vez
+  // de sempre o mês atual) — reaproveitado direto em vez de duplicar a query.
   async getMonthlySummary(userId: string, month: string): Promise<MonthlySummary> {
     const range = month === 'all' ? null : monthRange(month)
     const dateParams = range ? [userId, range.monthStart, range.monthEnd] : [userId]
