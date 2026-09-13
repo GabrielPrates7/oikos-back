@@ -70,7 +70,7 @@ export const dashboardRepository = {
   ): Promise<RecentIncomeEntryRow[]> {
     const result = await pool.query<RecentIncomeEntryRow>(
       `SELECT ie.id, ie.description, ie.amount_cents, ie.entry_date AS date,
-              a.name AS account_name, c.name AS category_name
+              a.name AS account_name, c.name AS category_name, c.icon AS category_icon
        FROM income_entries ie
        JOIN accounts a ON a.id = ie.account_id
        JOIN categories c ON c.id = ie.category_id
@@ -90,7 +90,7 @@ export const dashboardRepository = {
   ): Promise<RecentExpenseRow[]> {
     const result = await pool.query<RecentExpenseRow>(
       `SELECT e.id, e.description, e.amount_cents, e.expense_date AS date,
-              a.name AS account_name, c.name AS category_name
+              a.name AS account_name, c.name AS category_name, c.icon AS category_icon
        FROM expenses e
        JOIN accounts a ON a.id = e.account_id
        JOIN categories c ON c.id = e.category_id

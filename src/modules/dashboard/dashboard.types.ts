@@ -19,6 +19,7 @@ export interface RecentIncomeEntryRow {
   date: string
   account_name: string
   category_name: string
+  category_icon: string | null
 }
 
 export interface RecentExpenseRow {
@@ -28,6 +29,7 @@ export interface RecentExpenseRow {
   date: string
   account_name: string
   category_name: string
+  category_icon: string | null
 }
 
 export interface RecentTransferRow {

@@ -55,6 +55,7 @@ interface RecentTransaction {
   date: string
   accountName: string
   categoryName?: string
+  categoryIcon?: string | null
 }
 
 export interface DashboardSummary {
@@ -211,6 +212,7 @@ export const dashboardService = {
         date: row.date,
         accountName: row.account_name,
         categoryName: row.category_name,
+        categoryIcon: row.category_icon,
       })),
       ...recentExpenses.map((row): RecentTransaction => ({
         type: 'expense',
@@ -220,6 +222,7 @@ export const dashboardService = {
         date: row.date,
         accountName: row.account_name,
         categoryName: row.category_name,
+        categoryIcon: row.category_icon,
       })),
       ...recentTransfers.map((row): RecentTransaction => ({
         type: 'transfer',
