@@ -5,6 +5,7 @@ import {
   comparisonQuerySchema,
   monthOnlyQuerySchema,
   monthlyEvolutionQuerySchema,
+  spendingTrendsQuerySchema,
 } from './reports.schema.js'
 import { reportsService } from './reports.service.js'
 
@@ -59,5 +60,14 @@ export async function fixedVsNonFixed(
 ): Promise<void> {
   const { month } = monthOnlyQuerySchema.parse(request.query)
   const result = await reportsService.getFixedVsNonFixed(request.user!.id, month)
+  reply.send(result)
+}
+
+export async function spendingTrends(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const { month, monthsBack } = spendingTrendsQuerySchema.parse(request.query)
+  const result = await reportsService.getSpendingTrends(request.user!.id, month, monthsBack)
   reply.send(result)
 }

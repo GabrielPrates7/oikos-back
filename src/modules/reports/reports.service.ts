@@ -29,6 +29,16 @@ function lastNMonths(n: number): string[] {
   return months
 }
 
+// Mesma ideia de lastNMonths, mas terminando num mês arbitrário (o mês do MonthSwitcher do
+// Dashboard) em vez de sempre "hoje" — usado por getSpendingTrends.
+function lastNMonthsEnding(endMonth: string, n: number): string[] {
+  const months: string[] = []
+  for (let i = n - 1; i >= 0; i--) {
+    months.push(subtractMonths(endMonth, i))
+  }
+  return months
+}
+
 interface CategoryBreakdownItem {
   categoryId: string
   name: string
@@ -78,6 +88,27 @@ interface EssentialVsSuperfluousResult extends EssentialVsSuperfluousTotals {
 
 interface FixedVsNonFixedResult extends FixedVsNonFixedTotals {
   month: string
+}
+
+interface SpendingTrendPoint {
+  month: string
+  totalCents: number
+  // Média móvel de 3 meses (o próprio mês + até 2 anteriores; nos dois primeiros meses da
+  // janela usa só o que existe — 1 ou 2 pontos — em vez de tratar meses fora do período
+  // como zero, o que puxaria a média artificialmente pra baixo bem no início da série).
+  movingAvgCents: number
+}
+
+interface SpendingTrendCategoryItem {
+  categoryId: string
+  name: string
+  icon: string | null
+  points: SpendingTrendPoint[]
+}
+
+interface SpendingTrendsResult {
+  months: string[]
+  categories: SpendingTrendCategoryItem[]
 }
 
 interface ComparisonResult {
@@ -258,5 +289,65 @@ export const reportsService = {
     const totals = await reportsRepository.getFixedVsNonFixed(userId, monthStart, monthEnd)
 
     return { month: resolvedMonth, ...totals }
+  },
+
+  // Só as N categorias com maior variância de gasto nos últimos `monthsBack` meses (não
+  // todas) — a análise de "Tendências de Gastos Mensais" do Dashboard existe pra destacar
+  // onde o gasto anda mais instável, não pra repetir o breakdown de categoria já mostrado
+  // em "Despesas por categoria" logo acima na mesma tela.
+  async getSpendingTrends(
+    userId: string,
+    month: string | undefined,
+    monthsBack: number,
+  ): Promise<SpendingTrendsResult> {
+    const resolvedMonth = month ?? currentMonthString()
+    const months = lastNMonthsEnding(resolvedMonth, monthsBack)
+
+    const breakdownsByMonth = await Promise.all(
+      months.map((m) => {
+        const { monthStart, monthEnd } = monthRange(m)
+        return dashboardRepository.getCategoryBreakdown(userId, monthStart, monthEnd, 'expense')
+      }),
+    )
+
+    const categoryMap = new Map<string, { name: string; icon: string | null; totals: number[] }>()
+    breakdownsByMonth.forEach((rows, monthIndex) => {
+      for (const row of rows) {
+        if (!categoryMap.has(row.category_id)) {
+          categoryMap.set(row.category_id, {
+            name: row.name,
+            icon: row.icon,
+            totals: new Array(months.length).fill(0),
+          })
+        }
+        categoryMap.get(row.category_id)!.totals[monthIndex] = row.total_cents
+      }
+    })
+
+    const withVariance = Array.from(categoryMap.entries()).map(([categoryId, data]) => {
+      const mean = data.totals.reduce((sum, value) => sum + value, 0) / data.totals.length
+      const variance =
+        data.totals.reduce((sum, value) => sum + (value - mean) ** 2, 0) / data.totals.length
+      return { categoryId, ...data, variance }
+    })
+
+    const topCategories = withVariance.sort((a, b) => b.variance - a.variance).slice(0, 4)
+
+    const categories: SpendingTrendCategoryItem[] = topCategories.map((category) => ({
+      categoryId: category.categoryId,
+      name: category.name,
+      icon: category.icon,
+      points: months.map((m, index) => {
+        // Janela de até 3 meses terminando no mês atual do loop — nos dois primeiros meses
+        // da série usa só o que existe (1 ou depois 2 pontos), nunca zero-preenchido.
+        const window = category.totals.slice(Math.max(0, index - 2), index + 1)
+        const movingAvgCents = Math.round(
+          window.reduce((sum, value) => sum + value, 0) / window.length,
+        )
+        return { month: m, totalCents: category.totals[index], movingAvgCents }
+      }),
+    }))
+
+    return { months, categories }
   },
 }

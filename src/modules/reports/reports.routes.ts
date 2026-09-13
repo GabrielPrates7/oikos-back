@@ -8,6 +8,7 @@ import {
   fixedVsNonFixed,
   monthlyEvolution,
   byReceiptMethod,
+  spendingTrends,
 } from './reports.controller.js'
 
 export async function reportsRoutes(app: FastifyInstance): Promise<void> {
@@ -20,4 +21,5 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/by-receipt-method', byReceiptMethod)
   app.get('/essential-vs-superfluous', essentialVsSuperfluous)
   app.get('/fixed-vs-non-fixed', fixedVsNonFixed)
+  app.get('/spending-trends', spendingTrends)
 }

@@ -24,3 +24,8 @@ export const byAccountQuerySchema = z.object({
 export const monthOnlyQuerySchema = z.object({
   month: monthSchema.optional(),
 })
+
+export const spendingTrendsQuerySchema = z.object({
+  month: monthSchema.optional(),
+  monthsBack: z.coerce.number().int().min(3).max(24).default(6),
+})
