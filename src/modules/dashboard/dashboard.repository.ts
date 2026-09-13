@@ -143,6 +143,23 @@ export const dashboardRepository = {
     return result.rows
   },
 
+  // Taxa de Poupança do SummaryCards — soma direto por conta do usuário (goal_contributions
+  // não tem user_id próprio, só account_id/goal_id, ambos já escopados ao usuário via FK).
+  async getMonthlyGoalContributionsTotal(
+    userId: string,
+    monthStart: string,
+    monthEnd: string,
+  ): Promise<number> {
+    const result = await pool.query<{ total_cents: number }>(
+      `SELECT COALESCE(SUM(gc.amount_cents), 0)::int AS total_cents
+       FROM goal_contributions gc
+       JOIN accounts a ON a.id = gc.account_id
+       WHERE a.user_id = $1 AND gc.contribution_date BETWEEN $2 AND $3`,
+      [userId, monthStart, monthEnd],
+    )
+    return result.rows[0].total_cents
+  },
+
   async getRecentGoalContributions(
     userId: string,
     monthStart: string,

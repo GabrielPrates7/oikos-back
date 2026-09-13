@@ -14,6 +14,14 @@ function resolveMonthRange(month?: string): {
   return { month: resolvedMonth, monthStart, monthEnd }
 }
 
+// Todos os *Percent do SummaryCards são relativos às entradas do mês (exceto
+// patrimonioLiquidoPercent, relativo ao saldo — ver comentário no campo). 0 entradas vira
+// 0%, não NaN/Infinity.
+function safePercent(numerator: number, denominator: number): number {
+  if (denominator === 0) return 0
+  return Math.round((numerator / denominator) * 100)
+}
+
 interface AccountSummary {
   id: string
   name: string
@@ -32,6 +40,9 @@ interface CategoryExpenseSummary {
   name: string
   icon: string | null
   totalCents: number
+  // % do total pago no mês (não % do total de despesas por categoria — os itens não somam
+  // 100% entre si, cada um é independente, mesma fórmula pedida pro SummaryCards).
+  percentOfTotal: number
 }
 
 type TransactionType = 'income' | 'expense' | 'transfer' | 'invoice_payment' | 'goal_contribution'
@@ -60,7 +71,21 @@ export interface DashboardSummary {
   // + faturas não pagas com due_date no mês. Substitui o antigo totalPendingInvoicesCents
   // (que era global, todas as faturas em aberto de sempre, sem filtro de mês).
   jaPagoCents: number
+  jaPagoPercent: number
   faltaPagarCents: number
+  faltaPagarPercent: number
+  lucroCents: number
+  lucroMargemPercent: number
+  // totalBalanceCents - dívida em aberto de todos os cartões ativos (credit_limit -
+  // available_limit de cada um, já calculado em creditCardSummaries).
+  patrimonioLiquidoCents: number
+  // Não pedido explicitamente na especificação — adicionado pra bater com a barra de
+  // progresso da imagem de referência ("≈96%" sob Patrimônio Líquido). Relativo ao saldo
+  // total (não às entradas, diferente dos demais *Percent), já que patrimônio líquido é uma
+  // métrica de saldo, não de fluxo do mês. Reportado ao usuário para confirmação.
+  patrimonioLiquidoPercent: number
+  poupancaCents: number
+  taxaPoupancaPercent: number
   accounts: AccountSummary[]
   creditCards: CreditCardSummary[]
   expensesByCategory: CategoryExpenseSummary[]
@@ -92,6 +117,12 @@ export const dashboardService = {
     const { totalPagoCents: jaPagoCents, totalFaltaPagarCents: faltaPagarCents } =
       await expensesRepository.getMonthlySummary(userId, resolvedMonth)
 
+    const entradasCents = totals.incomeCents
+    const jaPagoPercent = safePercent(jaPagoCents, entradasCents)
+    const faltaPagarPercent = safePercent(faltaPagarCents, entradasCents)
+    const lucroCents = entradasCents - jaPagoCents
+    const lucroMargemPercent = safePercent(lucroCents, entradasCents)
+
     const creditCards = await creditCardsRepository.findAllByUser(userId)
     const creditCardSummaries: CreditCardSummary[] = await Promise.all(
       creditCards.map(async (card) => {
@@ -104,6 +135,19 @@ export const dashboardService = {
         }
       }),
     )
+    const totalCardDebtCents = creditCardSummaries.reduce(
+      (sum, card) => sum + (card.creditLimitCents - card.availableLimitCents),
+      0,
+    )
+    const patrimonioLiquidoCents = totalBalanceCents - totalCardDebtCents
+    const patrimonioLiquidoPercent = safePercent(patrimonioLiquidoCents, totalBalanceCents)
+
+    const poupancaCents = await dashboardRepository.getMonthlyGoalContributionsTotal(
+      userId,
+      monthStart,
+      monthEnd,
+    )
+    const taxaPoupancaPercent = safePercent(poupancaCents, entradasCents)
 
     const expensesByCategoryRows = await dashboardRepository.getCategoryBreakdown(
       userId,
@@ -116,6 +160,7 @@ export const dashboardService = {
       name: row.name,
       icon: row.icon,
       totalCents: row.total_cents,
+      percentOfTotal: safePercent(row.total_cents, jaPagoCents),
     }))
 
     const [
@@ -215,7 +260,15 @@ export const dashboardService = {
       },
       totalBalanceCents,
       jaPagoCents,
+      jaPagoPercent,
       faltaPagarCents,
+      faltaPagarPercent,
+      lucroCents,
+      lucroMargemPercent,
+      patrimonioLiquidoCents,
+      patrimonioLiquidoPercent,
+      poupancaCents,
+      taxaPoupancaPercent,
       accounts: accountSummaries,
       creditCards: creditCardSummaries,
       expensesByCategory,
