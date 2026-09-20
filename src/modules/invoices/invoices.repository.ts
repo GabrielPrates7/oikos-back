@@ -8,9 +8,19 @@ export type InvoiceSort = 'value_asc' | 'value_desc'
 export interface InvoiceListFilters {
   creditCardId?: string
   search?: string
-  // undefined = "padrão" (mês atual OU mês anterior não paga — mesma regra que já existia
-  // no filtro client-side); 'all' = sem filtro de mês; 'YYYY-MM' = mês exato.
+  // Número do mês de REFERÊNCIA ('01'..'12'); undefined/'all' = todos os meses. Independente
+  // de year e de status (antes esta opção embutia "mês atual + não paga de mês anterior",
+  // misturando período e status num só valor).
   month?: string
+  // 'YYYY' — restringe ao ano do mês de REFERÊNCIA da fatura (mesmo eixo do filtro de mês).
+  year?: string
+  // 'unpaid' = fatura ainda não paga; 'paid' = paga.
+  status?: 'unpaid' | 'paid'
+  // Período de VENCIMENTO (due_date), 'YYYY-MM-DD' inclusivo. Se qualquer um dos dois vier,
+  // o intervalo explícito manda e month/year são ignorados (mesma regra de from/to em
+  // Entradas/Despesas: quem digita um intervalo pediu aquele intervalo).
+  dueFrom?: string
+  dueTo?: string
 }
 
 // Compartilhado entre findAllByUser (paginada) e getFilteredSum (agregada, sem
@@ -34,17 +44,32 @@ function buildWhere(userId: string, filters: InvoiceListFilters): { where: strin
     )`)
   }
 
-  // status != 'paid' basta pra "não paga" aqui: computeDisplayStatus só devolve 'paid'
-  // quando o status bruto já é 'paid' (nunca é derivado de data) — ver invoice-status.util.
-  if (filters.month === undefined) {
-    conditions.push(`(
-      i.reference_month = date_trunc('month', CURRENT_DATE)::date
-      OR (i.reference_month < date_trunc('month', CURRENT_DATE)::date AND i.status != 'paid')
-    )`)
-  } else if (filters.month !== 'all') {
-    values.push(`${filters.month}-01`)
-    conditions.push(`i.reference_month = $${values.length}::date`)
+  if (filters.dueFrom !== undefined || filters.dueTo !== undefined) {
+    if (filters.dueFrom !== undefined) {
+      values.push(filters.dueFrom)
+      conditions.push(`i.due_date >= $${values.length}::date`)
+    }
+    if (filters.dueTo !== undefined) {
+      values.push(filters.dueTo)
+      conditions.push(`i.due_date <= $${values.length}::date`)
+    }
+    return { where: conditions.join(' AND '), values }
   }
+
+  if (filters.month !== undefined && filters.month !== 'all') {
+    values.push(Number(filters.month))
+    conditions.push(`EXTRACT(MONTH FROM i.reference_month) = $${values.length}::int`)
+  }
+
+  if (filters.year !== undefined) {
+    values.push(Number(filters.year))
+    conditions.push(`EXTRACT(YEAR FROM i.reference_month) = $${values.length}::int`)
+  }
+
+  // status != 'paid' basta pra "não paga": computeDisplayStatus só devolve 'paid' quando o
+  // status bruto já é 'paid' (nunca é derivado de data) — ver invoice-status.util.
+  if (filters.status === 'unpaid') conditions.push("i.status != 'paid'")
+  if (filters.status === 'paid') conditions.push("i.status = 'paid'")
 
   return { where: conditions.join(' AND '), values }
 }

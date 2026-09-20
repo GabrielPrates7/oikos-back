@@ -58,6 +58,11 @@ export async function list(request: FastifyRequest, reply: FastifyReply): Promis
   })
 }
 
+export async function getYears(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const years = await incomeEntriesService.getAvailableYears(request.user!.id)
+  reply.send({ years })
+}
+
 export async function create(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const body = createIncomeEntrySchema.parse(request.body)
   const incomeEntry = await incomeEntriesService.create(request.user!.id, body)

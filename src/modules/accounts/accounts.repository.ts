@@ -1,3 +1,4 @@
+import type { PoolClient } from 'pg'
 import { pool } from '../../config/database.js'
 import type { PaginationParams } from '../../utils/pagination.js'
 import type { CreateAccountInput, UpdateAccountInput } from './accounts.schema.js'
@@ -146,11 +147,18 @@ export const accountsRepository = {
     return result.rows[0] ?? null
   },
 
-  async getBalance(id: string, userId: string): Promise<{ balanceCents: number } | null> {
+  // db opcional: dentro de uma transação (ex: edição de transferência, que desfaz a antiga
+  // antes de validar a nova) o saldo precisa ser lido pelo MESMO client pra enxergar as
+  // mudanças ainda não commitadas.
+  async getBalance(
+    id: string,
+    userId: string,
+    db: Pick<PoolClient, 'query'> = pool,
+  ): Promise<{ balanceCents: number } | null> {
     // Fórmula completa da seção 5.2 do documento técnico (modelo de razão contábil).
     // Subqueries agregadas (não LEFT JOIN em paralelo) pra não multiplicar linhas.
     // O filtro por a.user_id = $2 já confirma posse antes de calcular.
-    const result = await pool.query<{ balance_cents: number }>(
+    const result = await db.query<{ balance_cents: number }>(
       `SELECT
          (
            a.initial_balance_cents

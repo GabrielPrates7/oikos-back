@@ -13,6 +13,10 @@ const baseIncomeEntryFields = {
   is_received: z.boolean(),
   is_planned: z.boolean(),
   received_date: isoDateSchema.nullable().optional(),
+  // default(true) só se aplica no create (schema base sem .partial()) — omitido, vira
+  // true sozinho, sem o front precisar mandar o campo pra manter o comportamento de hoje.
+  // No update (.partial() abaixo), omitido continua omitido (não força reset pra true).
+  count_in_totals: z.boolean().default(true),
 }
 
 // Mesma lógica de expenses.schema (paidDateMatchesIsPaid) — roda no create (is_received

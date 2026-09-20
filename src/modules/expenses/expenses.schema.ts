@@ -15,6 +15,10 @@ const baseExpenseFields = {
   is_paid: z.boolean(),
   is_planned: z.boolean(),
   paid_date: isoDateSchema.nullable().optional(),
+  // default(true) só se aplica no create (schema base sem .partial()) — omitido, vira
+  // true sozinho, sem o front precisar mandar o campo pra manter o comportamento de hoje.
+  // No update (.partial() abaixo), omitido continua omitido (não força reset pra true).
+  count_in_totals: z.boolean().default(true),
 }
 
 // Roda tanto no create (is_paid sempre presente, campo obrigatório na base) quanto no

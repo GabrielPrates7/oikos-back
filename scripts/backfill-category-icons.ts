@@ -1,8 +1,13 @@
-// Backfill de icon nas categorias reais criadas sem emoji (scripts/import-setembro.ts,
-// NEW_CATEGORIES) — Faculdade, Academia, Corte de Cabelo, Dízimo, Assinaturas, Empréstimo,
-// Moto, Auto Cuidado, Combustível, Comissão.
+// Backfill de icon nas categorias reais que ainda estão sem emoji.
 //
-// Mesmo padrão do script de import: tudo passa pela API HTTP real, autenticado via login
+// Mapeamento definitivo passado pela instrução (substitui a tentativa anterior deste script,
+// que nunca chegou a rodar — todas as categorias abaixo ainda estão com icon = null). Uma
+// ambiguidade resolvida aqui, não explícita na instrução: "Presente" existe como categoria
+// de despesa (própria do usuário, sem ícone) E de receita (padrão compartilhada, já com
+// 🎁) — o alvo é a de DESPESA, já que é a única das duas que precisa do ícone e é a única
+// do grupo (as outras 9 também são despesas próprias, exceto Comissão que é receita).
+//
+// Mesmo padrão dos scripts anteriores: tudo passa pela API HTTP real, autenticado via login
 // interativo no terminal. NUNCA faz UPDATE direto no banco, nunca hardcoda credenciais,
 // nunca salva o token em disco (fica só em memória durante a execução).
 //
@@ -15,7 +20,7 @@ const BASE_URL = process.env.API_BASE_URL ?? 'http://localhost:3000/api'
 let accessToken: string | null = null
 
 // ---------------------------------------------------------------------------
-// Prompt interativo (mesmo código de scripts/import-setembro.ts)
+// Prompt interativo (mesmo código dos scripts anteriores)
 // ---------------------------------------------------------------------------
 
 const CTRL_C = String.fromCharCode(3)
@@ -107,6 +112,20 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   return json as T
 }
 
+// pageSize:100 explícito — /categories pagina por padrão (20 por página) desde a fase de
+// paginação; sem isso, uma lista com mais de 20 categorias perderia as últimas.
+async function fetchCategories(type: 'expense' | 'income'): Promise<Category[]> {
+  const { categories } = await req<{ categories: Category[] }>(
+    'GET',
+    `/categories?type=${type}&pageSize=100`,
+  )
+  return categories
+}
+
+function iconOrDash(icon: string | null): string {
+  return icon ?? '—'
+}
+
 // ---------------------------------------------------------------------------
 // Tipos mínimos
 // ---------------------------------------------------------------------------
@@ -116,6 +135,30 @@ interface Category {
   name: string
   type: 'income' | 'expense'
   icon: string | null
+}
+
+// ---------------------------------------------------------------------------
+// Mapeamento definitivo: nome exato -> { tipo, emoji }. Tipo importa porque "Presente"
+// existe nos dois (ver comentário no topo do arquivo) — buscar sem separar por tipo
+// resolveria pro registro errado.
+// ---------------------------------------------------------------------------
+
+interface IconDef {
+  type: 'expense' | 'income'
+  icon: string
+}
+
+const CATEGORY_ICONS: Record<string, IconDef> = {
+  Empréstimo: { type: 'expense', icon: '🏦' },
+  Academia: { type: 'expense', icon: '💪' },
+  Assinaturas: { type: 'expense', icon: '📺' },
+  'Auto Cuidado': { type: 'expense', icon: '🧴' },
+  Combustível: { type: 'expense', icon: '⛽' },
+  'Corte de Cabelo': { type: 'expense', icon: '✂️' },
+  Dízimo: { type: 'expense', icon: '🙏' },
+  Moto: { type: 'expense', icon: '🏍️' },
+  Presente: { type: 'expense', icon: '🎁' },
+  Comissão: { type: 'income', icon: '💵' },
 }
 
 // ---------------------------------------------------------------------------
@@ -140,45 +183,48 @@ async function login(): Promise<void> {
 // Passo 2: backfill dos ícones
 // ---------------------------------------------------------------------------
 
-// Nome exato da categoria -> emoji. Mapeamento escolhido por mim (não veio especificado
-// literalmente na instrução) — revise antes de rodar, é só trocar o valor aqui.
-const CATEGORY_ICONS: Record<string, string> = {
-  Faculdade: '🎓',
-  Academia: '🏋️',
-  'Corte de Cabelo': '💇',
-  Dízimo: '⛪',
-  Assinaturas: '📱',
-  Empréstimo: '🏦',
-  Moto: '🏍️',
-  'Auto Cuidado': '🧴',
-  Combustível: '⛽',
-  Comissão: '💰',
-}
-
 async function backfillCategoryIcons(): Promise<void> {
   console.log('\n==> Passo 2: backfill de ícones das categorias')
-  const { categories } = await req<{ categories: Category[] }>('GET', '/categories?type=expense')
 
-  for (const [name, icon] of Object.entries(CATEGORY_ICONS)) {
-    const category = categories.find((c) => c.name === name)
+  const expenseCategories = await fetchCategories('expense')
+  const incomeCategories = await fetchCategories('income')
+
+  for (const [name, { type, icon }] of Object.entries(CATEGORY_ICONS)) {
+    const pool = type === 'expense' ? expenseCategories : incomeCategories
+    const category = pool.find((c) => c.name === name)
     if (!category) {
-      throw new Error(`categoria não encontrada com o nome exato: "${name}"`)
+      throw new Error(`categoria de ${type} não encontrada com o nome exato: "${name}"`)
     }
 
     await req('PUT', `/categories/${category.id}`, { icon })
-    console.log(`  ${name}: icon=${icon}`)
+    console.log(`  ${name} (${type}): icon=${icon}`)
   }
 }
 
 // ---------------------------------------------------------------------------
-// Passo 3: relatório final
+// Passo 3: relatório final — confirma via GET que os 10 ícones foram aplicados
 // ---------------------------------------------------------------------------
 
 async function printReport(): Promise<void> {
-  console.log('\n==> Passo 3: relatório final (confira visualmente)')
-  const { categories } = await req<{ categories: Category[] }>('GET', '/categories?type=expense')
-  for (const category of categories) {
-    console.log(`  ${category.icon ?? '—'}  ${category.name}`)
+  console.log('\n==> Passo 3: relatório final (confirmando via GET)')
+
+  const expenseCategories = await fetchCategories('expense')
+  const incomeCategories = await fetchCategories('income')
+
+  let allOk = true
+  for (const [name, { type, icon: expectedIcon }] of Object.entries(CATEGORY_ICONS)) {
+    const pool = type === 'expense' ? expenseCategories : incomeCategories
+    const category = pool.find((c) => c.name === name)
+    const actualIcon = category?.icon ?? null
+    const ok = actualIcon === expectedIcon
+    allOk &&= ok
+    console.log(
+      `  ${ok ? 'OK ' : 'FALHOU'} ${name} (${type}): esperado ${expectedIcon}, encontrado ${iconOrDash(actualIcon)}`,
+    )
+  }
+
+  if (!allOk) {
+    throw new Error('nem todos os ícones bateram com o esperado — ver linhas "FALHOU" acima.')
   }
 }
 
@@ -194,10 +240,10 @@ async function main() {
     lastStep = 'passo 2 (backfill de ícones)'
     await backfillCategoryIcons()
 
-    lastStep = 'passo 3 (relatório final)'
+    lastStep = 'passo 3 (confirmar via GET)'
     await printReport()
 
-    console.log('\n✔ Backfill concluído com sucesso.')
+    console.log('\n✔ Backfill concluído e confirmado com sucesso.')
   } catch (error) {
     console.error(`\n✘ FALHOU em: ${lastStep}`)
     if (error instanceof Error) {

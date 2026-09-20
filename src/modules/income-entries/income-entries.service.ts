@@ -46,6 +46,10 @@ export const incomeEntriesService = {
     return { items, total, sumCents, page: pagination.page, pageSize: pagination.pageSize }
   },
 
+  async getAvailableYears(userId: string): Promise<number[]> {
+    return incomeEntriesRepository.getAvailableYears(userId)
+  },
+
   async getById(id: string, userId: string): Promise<IncomeEntry> {
     const entry = await incomeEntriesRepository.findByIdAndUser(id, userId)
     if (!entry) {

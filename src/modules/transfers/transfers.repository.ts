@@ -1,3 +1,4 @@
+import type { PoolClient } from 'pg'
 import { pool } from '../../config/database.js'
 import type { PaginationParams } from '../../utils/pagination.js'
 import type { CreateTransferInput } from './transfers.schema.js'
@@ -94,6 +95,50 @@ export const transfersRepository = {
       [id, userId],
     )
     return result.rows[0] ?? null
+  },
+
+  // Edição = desfazer a antiga e reaplicar a nova, tudo no mesmo client/transação (o saldo é
+  // derivado da tabela transfers, não armazenado — apagar a linha antiga JÁ reverte
+  // origem/destino). Estas duas funções existem só pra service.update.
+  async findByIdForUpdate(
+    client: PoolClient,
+    id: string,
+    userId: string,
+  ): Promise<Transfer | null> {
+    const result = await client.query<Transfer>(
+      'SELECT * FROM transfers WHERE id = $1 AND user_id = $2 FOR UPDATE',
+      [id, userId],
+    )
+    return result.rows[0] ?? null
+  },
+
+  async deleteWithClient(client: PoolClient, id: string, userId: string): Promise<void> {
+    await client.query('DELETE FROM transfers WHERE id = $1 AND user_id = $2', [id, userId])
+  },
+
+  // Reinsere preservando id e created_at do original — pra quem olha de fora (ordenação por
+  // created_at, links por id) é a MESMA transferência, só com valores novos.
+  async insertWithIdentity(
+    client: PoolClient,
+    original: Transfer,
+    data: Omit<CreateTransferInput, 'description'> & { description: string | null },
+  ): Promise<Transfer> {
+    const result = await client.query<Transfer>(
+      `INSERT INTO transfers (id, user_id, from_account_id, to_account_id, amount_cents, transfer_date, description, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`,
+      [
+        original.id,
+        original.user_id,
+        data.from_account_id,
+        data.to_account_id,
+        data.amount_cents,
+        data.transfer_date,
+        data.description,
+        original.created_at,
+      ],
+    )
+    return result.rows[0]
   },
 
   async delete(id: string, userId: string): Promise<boolean> {

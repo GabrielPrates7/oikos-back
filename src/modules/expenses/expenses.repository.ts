@@ -38,10 +38,22 @@ function buildWhere(userId: string, filters: ExpenseFilters): { where: string; v
 }
 
 export const expensesRepository = {
+  // Anos com pelo menos uma despesa de verdade — popula o filtro "Ano" da UI sem lista fixa
+  // arbitrária, mesmo princípio de income-entries.repository.getAvailableYears.
+  async getAvailableYears(userId: string): Promise<number[]> {
+    const result = await pool.query<{ year: number }>(
+      `SELECT DISTINCT EXTRACT(YEAR FROM expense_date)::int AS year
+       FROM expenses WHERE user_id = $1 ORDER BY year DESC`,
+      [userId],
+    )
+    return result.rows.map((row) => row.year)
+  },
+
+
   async create(userId: string, data: CreateExpenseInput): Promise<Expense> {
     const result = await pool.query<Expense>(
-      `INSERT INTO expenses (user_id, account_id, category_id, description, amount_cents, payment_method, expense_date, is_essential, is_fixed, is_paid, is_planned, paid_date)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `INSERT INTO expenses (user_id, account_id, category_id, description, amount_cents, payment_method, expense_date, is_essential, is_fixed, is_paid, is_planned, paid_date, count_in_totals)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
       [
         userId,
@@ -56,6 +68,7 @@ export const expensesRepository = {
         data.is_paid,
         data.is_planned,
         data.paid_date ?? null,
+        data.count_in_totals,
       ],
     )
     return result.rows[0]
@@ -86,9 +99,11 @@ export const expensesRepository = {
 
   // Mesmo WHERE de findAllByUser, sem LIMIT/OFFSET — total (contagem) e sumCents (soma) num
   // único round-trip, já que os dois agregam sobre o mesmo conjunto de linhas filtrado.
-  // total conta TODAS as linhas (bate com a paginação, pendente incluída); sumCents só soma
-  // as pagas (CASE WHEN, não filtro no WHERE) — mesmo critério que ListTotal aplicava no
-  // cliente antes da paginação existir (pendente não conta até virar paga de verdade).
+  // total conta TODAS as linhas (bate com a paginação, pendente incluída, count_in_totals
+  // ou não); sumCents só soma as pagas E marcadas count_in_totals (CASE WHEN, não filtro
+  // no WHERE — precisa continuar contando no `total`/paginação normalmente). Hoje esse
+  // sumCents não é exibido em Despesas (a UI usa getMonthlySummary abaixo pro "Geral"/"Já
+  // pago"/"Falta pagar") — ajustado mesmo assim, por consistência, caso passe a ser usado.
   async getFilteredSum(
     userId: string,
     filters: ExpenseFilters = {},
@@ -97,7 +112,7 @@ export const expensesRepository = {
     const result = await pool.query<{ total: number; sum_cents: number }>(
       `SELECT
          COUNT(*)::int AS total,
-         COALESCE(SUM(CASE WHEN is_paid THEN amount_cents ELSE 0 END), 0)::int AS sum_cents
+         COALESCE(SUM(CASE WHEN is_paid AND count_in_totals THEN amount_cents ELSE 0 END), 0)::int AS sum_cents
        FROM expenses WHERE ${where}`,
       values,
     )
@@ -145,14 +160,24 @@ export const expensesRepository = {
   // (paga/a pagar) da mesma fatura. Também usado por dashboard.service.getSummary (mesmo
   // conceito de Já pago/Falta pagar, só que parametrizado pelo mês do MonthSwitcher em vez
   // de sempre o mês atual) — reaproveitado direto em vez de duplicar a query.
-  async getMonthlySummary(userId: string, month: string): Promise<MonthlySummary> {
+  //
+  // respectCountInTotals (default false, fase 1): só o "Total exibido" de Despesas
+  // (expenses.controller → expensesService.getMonthlySummary) passa true. O Dashboard
+  // chama este método do repository DIRETO (bypassa o service), sem o parâmetro — continua
+  // somando tudo, sem mudança, de propósito (fase 2 decide o resto, um de cada vez).
+  async getMonthlySummary(
+    userId: string,
+    month: string,
+    respectCountInTotals = false,
+  ): Promise<MonthlySummary> {
     const range = month === 'all' ? null : monthRange(month)
     const dateParams = range ? [userId, range.monthStart, range.monthEnd] : [userId]
+    const countCondition = respectCountInTotals ? ' AND count_in_totals' : ''
 
     const expensesResult = await pool.query<{ paid_cents: number; pending_cents: number }>(
       `SELECT
-         COALESCE(SUM(CASE WHEN is_paid THEN amount_cents ELSE 0 END), 0)::int AS paid_cents,
-         COALESCE(SUM(CASE WHEN NOT is_paid THEN amount_cents ELSE 0 END), 0)::int AS pending_cents
+         COALESCE(SUM(CASE WHEN is_paid${countCondition} THEN amount_cents ELSE 0 END), 0)::int AS paid_cents,
+         COALESCE(SUM(CASE WHEN NOT is_paid${countCondition} THEN amount_cents ELSE 0 END), 0)::int AS pending_cents
        FROM expenses
        WHERE user_id = $1${range ? ' AND expense_date BETWEEN $2 AND $3' : ''}`,
       dateParams,

@@ -58,6 +58,10 @@ export const expensesService = {
     return { items, total, sumCents, page: pagination.page, pageSize: pagination.pageSize }
   },
 
+  async getAvailableYears(userId: string): Promise<number[]> {
+    return expensesRepository.getAvailableYears(userId)
+  },
+
   async getById(id: string, userId: string): Promise<Expense> {
     const expense = await expensesRepository.findByIdAndUser(id, userId)
     if (!expense) {
@@ -88,7 +92,10 @@ export const expensesService = {
     }
   },
 
+  // true fixo aqui — só chamado pelo controller (endpoint /expenses/monthly-summary, usado
+  // pelo "Total exibido" de Despesas). O Dashboard usa expensesRepository.getMonthlySummary
+  // direto, sem passar por este service, então não é afetado.
   async getMonthlySummary(userId: string, month: string): Promise<MonthlySummary> {
-    return expensesRepository.getMonthlySummary(userId, month)
+    return expensesRepository.getMonthlySummary(userId, month, true)
   },
 }

@@ -31,8 +31,8 @@ function buildWhere(userId: string, filters: IncomeEntryFilters): { where: strin
 export const incomeEntriesRepository = {
   async create(userId: string, data: CreateIncomeEntryInput): Promise<IncomeEntry> {
     const result = await pool.query<IncomeEntry>(
-      `INSERT INTO income_entries (user_id, account_id, category_id, description, amount_cents, entry_date, receipt_method, is_received, is_planned, received_date)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `INSERT INTO income_entries (user_id, account_id, category_id, description, amount_cents, entry_date, receipt_method, is_received, is_planned, received_date, count_in_totals)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
       [
         userId,
@@ -45,6 +45,7 @@ export const incomeEntriesRepository = {
         data.is_received,
         data.is_planned,
         data.received_date ?? null,
+        data.count_in_totals,
       ],
     )
     return result.rows[0]
@@ -75,9 +76,12 @@ export const incomeEntriesRepository = {
 
   // Mesmo WHERE de findAllByUser, sem LIMIT/OFFSET — total (contagem) e sumCents (soma) num
   // único round-trip, já que os dois agregam sobre o mesmo conjunto de linhas filtrado.
-  // total conta TODAS as linhas (bate com a paginação, pendente incluída); sumCents só soma
-  // as recebidas (CASE WHEN, não filtro no WHERE) — mesmo critério que ListTotal aplicava no
-  // cliente antes da paginação existir (pendente não conta até virar recebida de verdade).
+  // total conta TODAS as linhas (bate com a paginação, pendente incluída, count_in_totals
+  // ou não — a lista mostra tudo, só o SOMATÓRIO muda). sumCents só soma as recebidas E
+  // marcadas count_in_totals (CASE WHEN, não filtro no WHERE — precisa continuar contando
+  // no `total`/paginação normalmente). Fase 1: só esse sumCents ("Total exibido" de
+  // Entradas) respeita count_in_totals — Saldo Real/extrato de conta (accounts.service)
+  // não passam por aqui, continuam somando tudo.
   async getFilteredSum(
     userId: string,
     filters: IncomeEntryFilters = {},
@@ -86,11 +90,23 @@ export const incomeEntriesRepository = {
     const result = await pool.query<{ total: number; sum_cents: number }>(
       `SELECT
          COUNT(*)::int AS total,
-         COALESCE(SUM(CASE WHEN is_received THEN amount_cents ELSE 0 END), 0)::int AS sum_cents
+         COALESCE(SUM(CASE WHEN is_received AND count_in_totals THEN amount_cents ELSE 0 END), 0)::int AS sum_cents
        FROM income_entries WHERE ${where}`,
       values,
     )
     return { total: result.rows[0].total, sumCents: result.rows[0].sum_cents }
+  },
+
+  // Anos com pelo menos um lançamento de verdade — popula o filtro "Ano" da UI sem lista
+  // fixa arbitrária (ex: usuário novo só veria o ano em que criou a conta, não 2020-2030
+  // hardcoded sem dado nenhum).
+  async getAvailableYears(userId: string): Promise<number[]> {
+    const result = await pool.query<{ year: number }>(
+      `SELECT DISTINCT EXTRACT(YEAR FROM entry_date)::int AS year
+       FROM income_entries WHERE user_id = $1 ORDER BY year DESC`,
+      [userId],
+    )
+    return result.rows.map((row) => row.year)
   },
 
   async findByIdAndUser(id: string, userId: string): Promise<IncomeEntry | null> {

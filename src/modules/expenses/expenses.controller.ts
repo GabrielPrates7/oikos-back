@@ -78,6 +78,11 @@ export async function getMonthlySummary(request: FastifyRequest, reply: FastifyR
   reply.send(summary)
 }
 
+export async function getYears(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const years = await expensesService.getAvailableYears(request.user!.id)
+  reply.send({ years })
+}
+
 export async function create(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const body = createExpenseSchema.parse(request.body)
   const expense = await expensesService.create(request.user!.id, body)

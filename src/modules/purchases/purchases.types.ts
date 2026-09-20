@@ -20,4 +20,7 @@ export interface PurchaseWithCategory extends Purchase {
   category_icon: string | null
   payment_status: PurchasePaymentStatus
   has_paid_installment: boolean
+  // Meses ('YYYY-MM', ordenados, sem repetir) das faturas onde existe parcela desta compra —
+  // uma compra parcelada tem UMA purchase_date mas parcelas em vários meses/anos.
+  installment_months: string[]
 }

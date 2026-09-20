@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import { paginationQuerySchema } from '../../utils/pagination.js'
 import { isoDateSchema } from '../../utils/validation.js'
-import { createTransferSchema } from './transfers.schema.js'
+import { createTransferSchema, updateTransferSchema } from './transfers.schema.js'
 import { transfersService } from './transfers.service.js'
 
 const listQuerySchema = z.object({
@@ -41,6 +41,13 @@ export async function create(request: FastifyRequest, reply: FastifyReply): Prom
 export async function getById(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const { id } = idParamsSchema.parse(request.params)
   const transfer = await transfersService.getById(id, request.user!.id)
+  reply.send({ transfer })
+}
+
+export async function update(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const { id } = idParamsSchema.parse(request.params)
+  const body = updateTransferSchema.parse(request.body)
+  const transfer = await transfersService.update(id, request.user!.id, body)
   reply.send({ transfer })
 }
 
