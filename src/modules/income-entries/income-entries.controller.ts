@@ -14,6 +14,8 @@ const monthQuerySchema = z.union([z.literal('all'), z.string().regex(/^\d{4}-\d{
 const listQuerySchema = z.object({
   accountId: z.string().uuid().optional(),
   categoryId: z.string().uuid().optional(),
+  // Omitido = todas. pending = ainda não recebida.
+  status: z.enum(['pending', 'received']).optional(),
   from: isoDateSchema.optional(),
   to: isoDateSchema.optional(),
   month: monthQuerySchema.optional(),
@@ -46,13 +48,22 @@ export async function list(request: FastifyRequest, reply: FastifyReply): Promis
   const { dateFrom, dateTo } = resolveDateRange(query.from, query.to, query.month)
   const result = await incomeEntriesService.listByUser(
     request.user!.id,
-    { accountId: query.accountId, categoryId: query.categoryId, dateFrom, dateTo },
+    {
+      accountId: query.accountId,
+      categoryId: query.categoryId,
+      dateFrom,
+      dateTo,
+      status: query.status,
+    },
     { page: query.page, pageSize: query.pageSize },
   )
   reply.send({
     incomeEntries: result.items,
     total: result.total,
     sumCents: result.sumCents,
+    // 'pending' quando status=pending: sumCents é a soma dos PENDENTES (o front troca o rótulo
+    // do card pra "Total pendente"). Nos demais casos 'default' = soma de sempre (recebidas).
+    sumMode: query.status === 'pending' ? 'pending' : 'default',
     page: result.page,
     pageSize: result.pageSize,
   })

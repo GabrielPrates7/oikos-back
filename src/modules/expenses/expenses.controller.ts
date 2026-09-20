@@ -17,6 +17,10 @@ const listQuerySchema = z.object({
   accountId: z.string().uuid().optional(),
   categoryId: z.string().uuid().optional(),
   paymentMethod: paymentMethodSchema.optional(),
+  // Omitido = todos. pending = ainda não paga; essential/planned mapeiam is_essential/is_planned.
+  status: z.enum(['pending', 'paid']).optional(),
+  essential: z.enum(['essential', 'superfluous']).optional(),
+  planned: z.enum(['planned', 'unplanned']).optional(),
   from: isoDateSchema.optional(),
   to: isoDateSchema.optional(),
   month: monthQuerySchema.optional(),
@@ -60,6 +64,9 @@ export async function list(request: FastifyRequest, reply: FastifyReply): Promis
       paymentMethod: query.paymentMethod,
       dateFrom,
       dateTo,
+      status: query.status,
+      essential: query.essential,
+      planned: query.planned,
     },
     { page: query.page, pageSize: query.pageSize },
   )
@@ -67,6 +74,8 @@ export async function list(request: FastifyRequest, reply: FastifyReply): Promis
     expenses: result.items,
     total: result.total,
     sumCents: result.sumCents,
+    // 'pending' quando status=pending: sumCents é a soma dos PENDENTES; senão 'default' (pagas).
+    sumMode: query.status === 'pending' ? 'pending' : 'default',
     page: result.page,
     pageSize: result.pageSize,
   })

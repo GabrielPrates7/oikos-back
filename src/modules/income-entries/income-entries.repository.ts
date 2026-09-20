@@ -3,24 +3,31 @@ import type { PaginationParams } from '../../utils/pagination.js'
 import type { CreateIncomeEntryInput, UpdateIncomeEntryInput } from './income-entries.schema.js'
 import type { IncomeEntry } from './income-entries.types.js'
 
+// pending = ainda não recebida (is_received = false); received = já recebida.
+export type IncomeStatusFilter = 'pending' | 'received'
+
 export interface IncomeEntryFilters {
   accountId?: string
   categoryId?: string
   dateFrom?: string
   dateTo?: string
+  status?: IncomeStatusFilter
 }
 
 // Compartilhado entre findAllByUser (paginada) e getFilteredSum (agregada, sem
 // LIMIT/OFFSET) — as duas precisam do EXATO mesmo WHERE, senão o total/soma não bate com
 // as linhas realmente listadas em alguma página.
 function buildWhere(userId: string, filters: IncomeEntryFilters): { where: string; values: unknown[] } {
-  const optionalFilters: [string, string | undefined][] = [
+  const optionalFilters: [string, string | boolean | undefined][] = [
     ['account_id = ', filters.accountId],
     ['category_id = ', filters.categoryId],
     ['entry_date >= ', filters.dateFrom],
     ['entry_date <= ', filters.dateTo],
+    ['is_received = ', filters.status === undefined ? undefined : filters.status === 'received'],
   ]
-  const active = optionalFilters.filter((entry): entry is [string, string] => entry[1] !== undefined)
+  const active = optionalFilters.filter(
+    (entry): entry is [string, string | boolean] => entry[1] !== undefined,
+  )
 
   const conditions = ['user_id = $1', ...active.map(([clause], i) => `${clause}$${i + 2}`)]
   const values: unknown[] = [userId, ...active.map(([, value]) => value)]
@@ -82,15 +89,23 @@ export const incomeEntriesRepository = {
   // no `total`/paginação normalmente). Fase 1: só esse sumCents ("Total exibido" de
   // Entradas) respeita count_in_totals — Saldo Real/extrato de conta (accounts.service)
   // não passam por aqui, continuam somando tudo.
+  //
+  // status = 'pending' (filtro "Pendentes"): o WHERE já só deixa passar não-recebidas, então a
+  // soma deixa de ser "recebidas" (que daria sempre 0) e passa a ser a dos PENDENTES, ainda
+  // respeitando count_in_totals. Qualquer outro caso mantém a soma de sempre.
   async getFilteredSum(
     userId: string,
     filters: IncomeEntryFilters = {},
   ): Promise<{ total: number; sumCents: number }> {
     const { where, values } = buildWhere(userId, filters)
+    const summedCondition =
+      filters.status === 'pending'
+        ? 'NOT is_received AND count_in_totals'
+        : 'is_received AND count_in_totals'
     const result = await pool.query<{ total: number; sum_cents: number }>(
       `SELECT
          COUNT(*)::int AS total,
-         COALESCE(SUM(CASE WHEN is_received AND count_in_totals THEN amount_cents ELSE 0 END), 0)::int AS sum_cents
+         COALESCE(SUM(CASE WHEN ${summedCondition} THEN amount_cents ELSE 0 END), 0)::int AS sum_cents
        FROM income_entries WHERE ${where}`,
       values,
     )

@@ -10,26 +10,44 @@ export interface MonthlySummary {
   totalFaltaPagarCents: number
 }
 
+// pending = ainda não paga (is_paid = false); paid = já paga.
+export type ExpenseStatusFilter = 'pending' | 'paid'
+// essential -> is_essential = true; superfluous -> is_essential = false.
+export type ExpenseEssentialFilter = 'essential' | 'superfluous'
+// planned -> is_planned = true; unplanned -> is_planned = false.
+export type ExpensePlannedFilter = 'planned' | 'unplanned'
+
 export interface ExpenseFilters {
   accountId?: string
   categoryId?: string
   paymentMethod?: string
   dateFrom?: string
   dateTo?: string
+  status?: ExpenseStatusFilter
+  essential?: ExpenseEssentialFilter
+  planned?: ExpensePlannedFilter
 }
 
 // Compartilhado entre findAllByUser (paginada) e getFilteredSum (agregada, sem
 // LIMIT/OFFSET) — as duas precisam do EXATO mesmo WHERE, senão o total/soma não bate com
 // as linhas realmente listadas em alguma página.
 function buildWhere(userId: string, filters: ExpenseFilters): { where: string; values: unknown[] } {
-  const optionalFilters: [string, string | undefined][] = [
+  const optionalFilters: [string, string | boolean | undefined][] = [
     ['account_id = ', filters.accountId],
     ['category_id = ', filters.categoryId],
     ['payment_method = ', filters.paymentMethod],
     ['expense_date >= ', filters.dateFrom],
     ['expense_date <= ', filters.dateTo],
+    ['is_paid = ', filters.status === undefined ? undefined : filters.status === 'paid'],
+    [
+      'is_essential = ',
+      filters.essential === undefined ? undefined : filters.essential === 'essential',
+    ],
+    ['is_planned = ', filters.planned === undefined ? undefined : filters.planned === 'planned'],
   ]
-  const active = optionalFilters.filter((entry): entry is [string, string] => entry[1] !== undefined)
+  const active = optionalFilters.filter(
+    (entry): entry is [string, string | boolean] => entry[1] !== undefined,
+  )
 
   const conditions = ['user_id = $1', ...active.map(([clause], i) => `${clause}$${i + 2}`)]
   const values: unknown[] = [userId, ...active.map(([, value]) => value)]
@@ -109,10 +127,14 @@ export const expensesRepository = {
     filters: ExpenseFilters = {},
   ): Promise<{ total: number; sumCents: number }> {
     const { where, values } = buildWhere(userId, filters)
+    // status = 'pending': o WHERE só deixa passar não-pagas, então a soma passa a ser a dos
+    // PENDENTES (respeitando count_in_totals) em vez de "pagas" (que daria sempre 0).
+    const summedCondition =
+      filters.status === 'pending' ? 'NOT is_paid AND count_in_totals' : 'is_paid AND count_in_totals'
     const result = await pool.query<{ total: number; sum_cents: number }>(
       `SELECT
          COUNT(*)::int AS total,
-         COALESCE(SUM(CASE WHEN is_paid AND count_in_totals THEN amount_cents ELSE 0 END), 0)::int AS sum_cents
+         COALESCE(SUM(CASE WHEN ${summedCondition} THEN amount_cents ELSE 0 END), 0)::int AS sum_cents
        FROM expenses WHERE ${where}`,
       values,
     )
