@@ -18,5 +18,6 @@ export interface Expense {
   // e o resto do sistema (Dashboard, Relatórios) continuam somando tudo, de propósito
   // (fase 2 decide o resto, um de cada vez).
   count_in_totals: boolean
+  notes: string | null
   created_at: Date
 }

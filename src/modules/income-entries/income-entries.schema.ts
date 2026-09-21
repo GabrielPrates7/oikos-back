@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isoDateSchema } from '../../utils/validation.js'
+import { isoDateSchema, notesSchema } from '../../utils/validation.js'
 
 export const receiptMethodSchema = z.enum(['pix', 'transfer', 'cash', 'other'])
 
@@ -13,10 +13,16 @@ const baseIncomeEntryFields = {
   is_received: z.boolean(),
   is_planned: z.boolean(),
   received_date: isoDateSchema.nullable().optional(),
-  // default(true) só se aplica no create (schema base sem .partial()) — omitido, vira
-  // true sozinho, sem o front precisar mandar o campo pra manter o comportamento de hoje.
-  // No update (.partial() abaixo), omitido continua omitido (não força reset pra true).
-  count_in_totals: z.boolean().default(true),
+  // SEM .default() aqui de propósito. No Zod 4, um .default() dentro de um campo passado por
+  // .partial() CONTINUA aplicando o default quando o campo é omitido — então o PUT sem
+  // count_in_totals voltava o valor gravado para true (bug corrigido). O default de criação (true)
+  // fica só no createSchema, abaixo; no update, omitido = preserva o valor armazenado.
+  count_in_totals: z.boolean(),
+  // Recorrência ("fixa"). SEM default aqui de propósito: no PUT (.partial()), omitido tem que
+  // PRESERVAR o valor gravado; o default false da criação é aplicado no repository.
+  is_fixed: z.boolean().optional(),
+  // Observação opcional (string ou null). Omitida no PUT preserva; null limpa.
+  notes: notesSchema.optional(),
 }
 
 // Mesma lógica de expenses.schema (paidDateMatchesIsPaid) — roda no create (is_received
@@ -37,7 +43,7 @@ const receivedDateRefinement = {
 }
 
 export const createIncomeEntrySchema = z
-  .object(baseIncomeEntryFields)
+  .object({ ...baseIncomeEntryFields, count_in_totals: z.boolean().default(true) })
   .refine(receivedDateMatchesIsReceived, receivedDateRefinement)
 
 export const updateIncomeEntrySchema = z

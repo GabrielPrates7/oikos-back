@@ -16,6 +16,8 @@ const listQuerySchema = z.object({
   categoryId: z.string().uuid().optional(),
   // Omitido = todas. pending = ainda não recebida.
   status: z.enum(['pending', 'received']).optional(),
+  // Omitido = todas. fixed = só recorrentes (is_fixed).
+  fixed: z.enum(['fixed', 'unfixed']).optional(),
   from: isoDateSchema.optional(),
   to: isoDateSchema.optional(),
   month: monthQuerySchema.optional(),
@@ -54,6 +56,7 @@ export async function list(request: FastifyRequest, reply: FastifyReply): Promis
       dateFrom,
       dateTo,
       status: query.status,
+      fixed: query.fixed,
     },
     { page: query.page, pageSize: query.pageSize },
   )

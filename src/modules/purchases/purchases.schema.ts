@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isoDateSchema } from '../../utils/validation.js'
+import { isoDateSchema, notesSchema } from '../../utils/validation.js'
 
 export const createPurchaseSchema = z.object({
   credit_card_id: z.string().uuid(),
@@ -11,6 +11,8 @@ export const createPurchaseSchema = z.object({
   is_essential: z.boolean(),
   is_fixed: z.boolean(),
   is_planned: z.boolean(),
+  // Observação opcional (string ou null); omitida = sem observação.
+  notes: notesSchema.optional(),
 })
 
 // Campos estruturais (credit_card_id, total_amount_cents, installments_count,
@@ -28,6 +30,8 @@ export const updatePurchaseSchema = z.object({
   total_amount_cents: z.number().int().positive().optional(),
   installments_count: z.number().int().min(1).optional(),
   purchase_date: isoDateSchema.optional(),
+  // Omitida preserva; null limpa. NÃO é campo estrutural: editável mesmo com parcela já paga.
+  notes: notesSchema.optional(),
 })
 
 export type CreatePurchaseInput = z.infer<typeof createPurchaseSchema>

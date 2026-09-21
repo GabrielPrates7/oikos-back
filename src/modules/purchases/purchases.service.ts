@@ -225,6 +225,7 @@ export const purchasesService = {
           total_amount_cents: totalAmountCents,
           installments_count: installmentsCount,
           purchase_date: purchaseDate,
+          notes: data.notes,
         },
         client,
       )

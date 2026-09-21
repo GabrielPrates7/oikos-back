@@ -16,6 +16,8 @@ export type ExpenseStatusFilter = 'pending' | 'paid'
 export type ExpenseEssentialFilter = 'essential' | 'superfluous'
 // planned -> is_planned = true; unplanned -> is_planned = false.
 export type ExpensePlannedFilter = 'planned' | 'unplanned'
+// fixed -> is_fixed = true; unfixed -> is_fixed = false.
+export type ExpenseFixedFilter = 'fixed' | 'unfixed'
 
 export interface ExpenseFilters {
   accountId?: string
@@ -26,6 +28,7 @@ export interface ExpenseFilters {
   status?: ExpenseStatusFilter
   essential?: ExpenseEssentialFilter
   planned?: ExpensePlannedFilter
+  fixed?: ExpenseFixedFilter
 }
 
 // Compartilhado entre findAllByUser (paginada) e getFilteredSum (agregada, sem
@@ -44,6 +47,7 @@ function buildWhere(userId: string, filters: ExpenseFilters): { where: string; v
       filters.essential === undefined ? undefined : filters.essential === 'essential',
     ],
     ['is_planned = ', filters.planned === undefined ? undefined : filters.planned === 'planned'],
+    ['is_fixed = ', filters.fixed === undefined ? undefined : filters.fixed === 'fixed'],
   ]
   const active = optionalFilters.filter(
     (entry): entry is [string, string | boolean] => entry[1] !== undefined,
@@ -70,8 +74,8 @@ export const expensesRepository = {
 
   async create(userId: string, data: CreateExpenseInput): Promise<Expense> {
     const result = await pool.query<Expense>(
-      `INSERT INTO expenses (user_id, account_id, category_id, description, amount_cents, payment_method, expense_date, is_essential, is_fixed, is_paid, is_planned, paid_date, count_in_totals)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      `INSERT INTO expenses (user_id, account_id, category_id, description, amount_cents, payment_method, expense_date, is_essential, is_fixed, is_paid, is_planned, paid_date, count_in_totals, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING *`,
       [
         userId,
@@ -87,6 +91,7 @@ export const expensesRepository = {
         data.is_planned,
         data.paid_date ?? null,
         data.count_in_totals,
+        data.notes ?? null,
       ],
     )
     return result.rows[0]

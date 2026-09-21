@@ -21,6 +21,8 @@ const listQuerySchema = z.object({
   status: z.enum(['pending', 'paid']).optional(),
   essential: z.enum(['essential', 'superfluous']).optional(),
   planned: z.enum(['planned', 'unplanned']).optional(),
+  // Omitido = todas. fixed = só recorrentes (is_fixed).
+  fixed: z.enum(['fixed', 'unfixed']).optional(),
   from: isoDateSchema.optional(),
   to: isoDateSchema.optional(),
   month: monthQuerySchema.optional(),
@@ -67,6 +69,7 @@ export async function list(request: FastifyRequest, reply: FastifyReply): Promis
       status: query.status,
       essential: query.essential,
       planned: query.planned,
+      fixed: query.fixed,
     },
     { page: query.page, pageSize: query.pageSize },
   )

@@ -5,6 +5,7 @@ import type { IncomeEntry } from './income-entries.types.js'
 
 // pending = ainda não recebida (is_received = false); received = já recebida.
 export type IncomeStatusFilter = 'pending' | 'received'
+export type IncomeFixedFilter = 'fixed' | 'unfixed'
 
 export interface IncomeEntryFilters {
   accountId?: string
@@ -12,6 +13,8 @@ export interface IncomeEntryFilters {
   dateFrom?: string
   dateTo?: string
   status?: IncomeStatusFilter
+  // fixed = só recorrentes (is_fixed = true); unfixed = só as demais.
+  fixed?: IncomeFixedFilter
 }
 
 // Compartilhado entre findAllByUser (paginada) e getFilteredSum (agregada, sem
@@ -24,6 +27,7 @@ function buildWhere(userId: string, filters: IncomeEntryFilters): { where: strin
     ['entry_date >= ', filters.dateFrom],
     ['entry_date <= ', filters.dateTo],
     ['is_received = ', filters.status === undefined ? undefined : filters.status === 'received'],
+    ['is_fixed = ', filters.fixed === undefined ? undefined : filters.fixed === 'fixed'],
   ]
   const active = optionalFilters.filter(
     (entry): entry is [string, string | boolean] => entry[1] !== undefined,
@@ -38,8 +42,8 @@ function buildWhere(userId: string, filters: IncomeEntryFilters): { where: strin
 export const incomeEntriesRepository = {
   async create(userId: string, data: CreateIncomeEntryInput): Promise<IncomeEntry> {
     const result = await pool.query<IncomeEntry>(
-      `INSERT INTO income_entries (user_id, account_id, category_id, description, amount_cents, entry_date, receipt_method, is_received, is_planned, received_date, count_in_totals)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      `INSERT INTO income_entries (user_id, account_id, category_id, description, amount_cents, entry_date, receipt_method, is_received, is_planned, received_date, count_in_totals, is_fixed, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
       [
         userId,
@@ -53,6 +57,8 @@ export const incomeEntriesRepository = {
         data.is_planned,
         data.received_date ?? null,
         data.count_in_totals,
+        data.is_fixed ?? false,
+        data.notes ?? null,
       ],
     )
     return result.rows[0]

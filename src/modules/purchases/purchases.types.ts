@@ -10,6 +10,7 @@ export interface Purchase {
   is_essential: boolean
   is_fixed: boolean
   is_planned: boolean
+  notes: string | null
   created_at: Date
 }
 
