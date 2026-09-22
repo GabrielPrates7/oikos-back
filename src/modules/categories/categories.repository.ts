@@ -1,5 +1,6 @@
 import { pool } from '../../config/database.js'
 import type { PaginationParams } from '../../utils/pagination.js'
+import { DEFAULT_CATEGORIES } from './defaultCategories.js'
 import type { CreateCategoryInput, UpdateCategoryInput } from './categories.schema.js'
 import type { Category, CategoryType } from './categories.types.js'
 
@@ -12,6 +13,23 @@ export const categoriesRepository = {
       [userId, data.name, data.type, data.icon ?? null],
     )
     return result.rows[0]
+  },
+
+  // Seed do cadastro (auth.service.ts:register): toda categoria tem dono agora (migration
+  // 1790097890432), não existe mais linha compartilhada (user_id NULL) pra herdar por
+  // "OR user_id IS NULL" — o usuário novo precisa da sua própria cópia das 17 padrão.
+  async seedDefaultsForUser(userId: string): Promise<void> {
+    await pool.query(
+      `INSERT INTO categories (user_id, name, type, icon)
+       SELECT $1, name, type, icon
+       FROM unnest($2::text[], $3::text[], $4::text[]) AS d(name, type, icon)`,
+      [
+        userId,
+        DEFAULT_CATEGORIES.map((c) => c.name),
+        DEFAULT_CATEGORIES.map((c) => c.type),
+        DEFAULT_CATEGORIES.map((c) => c.icon),
+      ],
+    )
   },
 
   // pagination é opcional de propósito, mesmo padrão dos outros módulos paginados — hoje
@@ -36,8 +54,12 @@ export const categoriesRepository = {
       limitClause = ` LIMIT $${limitIndex} OFFSET $${offsetIndex}`
     }
 
+    // Toda categoria tem dono desde a migration 1790097890432 — não existe mais linha
+    // compartilhada (user_id NULL) pra incluir aqui. "Visível" e "própria" convergiram: esta
+    // função e findByIdOwnedByUser fazem a mesma checagem agora (mantidas separadas porque o
+    // nome de cada uma ainda documenta a intenção de quem chama — visualização vs. posse).
     const result = await pool.query<Category>(
-      `SELECT * FROM categories WHERE (user_id = $1 OR user_id IS NULL)${typeClause} ORDER BY name${limitClause}`,
+      `SELECT * FROM categories WHERE user_id = $1${typeClause} ORDER BY name${limitClause}`,
       values,
     )
     return result.rows
@@ -53,7 +75,7 @@ export const categoriesRepository = {
       typeClause = ` AND type = $${values.length}`
     }
     const result = await pool.query<{ total: number }>(
-      `SELECT COUNT(*)::int AS total FROM categories WHERE (user_id = $1 OR user_id IS NULL)${typeClause}`,
+      `SELECT COUNT(*)::int AS total FROM categories WHERE user_id = $1${typeClause}`,
       values,
     )
     return result.rows[0].total
@@ -61,7 +83,7 @@ export const categoriesRepository = {
 
   async findByIdVisibleToUser(id: string, userId: string): Promise<Category | null> {
     const result = await pool.query<Category>(
-      `SELECT * FROM categories WHERE id = $1 AND (user_id = $2 OR user_id IS NULL)`,
+      `SELECT * FROM categories WHERE id = $1 AND user_id = $2`,
       [id, userId],
     )
     return result.rows[0] ?? null
@@ -101,10 +123,12 @@ export const categoriesRepository = {
     return result.rows[0] ?? null
   },
 
-  // Escopado por usuário mesmo pra categoria padrão (user_id IS NULL, compartilhada) — o
-  // que interessa aqui é "quantas vezes ESSE usuário usou essa categoria", não o total
-  // global entre todos os usuários (que vazaria atividade de terceiros e não diz nada útil
-  // pra quem está olhando a própria lista de Categorias).
+  // Escopado por usuário: o que interessa aqui é "quantas vezes ESSE usuário usou essa
+  // categoria", não o total global entre todos os usuários (que vazaria atividade de
+  // terceiros e não diz nada útil pra quem está olhando a própria lista de Categorias).
+  // NOTA (fora do escopo desta migração): soma só income_entries/expenses/purchases — não
+  // conta budgets nem plan_items, então uma categoria pode aparecer com "0 movimentações"
+  // aqui e mesmo assim estar em uso (exclusão falharia com 409 mesmo sem uso aparente).
   async countUsage(categoryId: string, userId: string): Promise<number> {
     const result = await pool.query<{ count: number }>(
       `SELECT (

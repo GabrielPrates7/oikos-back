@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import { env } from '../../config/env.js'
+import { categoriesRepository } from '../categories/categories.repository.js'
 import { ConflictError, NotFoundError, UnauthorizedError } from '../../errors/AppError.js'
 import { usersRepository } from '../users/users.repository.js'
 import type { PublicUser } from '../users/users.types.js'
@@ -32,6 +33,10 @@ export const authService = {
 
     const passwordHash = await bcrypt.hash(password, BCRYPT_COST)
     const user = await usersRepository.createUser(name, email, passwordHash)
+    // Toda categoria tem dono desde a migration 1790097890432 — não há mais linha
+    // compartilhada (user_id NULL) pra herdar. O usuário novo ganha sua própria cópia das
+    // 17 categorias padrão aqui, a partir da lista fixa (não de nenhum estado do banco).
+    await categoriesRepository.seedDefaultsForUser(user.id)
 
     return {
       user,
