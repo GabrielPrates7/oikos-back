@@ -74,7 +74,7 @@ export const accountsRepository = {
            - COALESCE((SELECT SUM(amount_cents) FROM expenses WHERE account_id = a.id AND is_paid = true), 0)
            - COALESCE((SELECT SUM(amount_cents) FROM transfers WHERE from_account_id = a.id), 0)
            + COALESCE((SELECT SUM(amount_cents) FROM transfers WHERE to_account_id = a.id), 0)
-           - COALESCE((SELECT SUM(amount_cents) FROM invoice_payments WHERE account_id = a.id), 0)
+           - COALESCE((SELECT SUM(amount_cents) FROM invoice_payments WHERE account_id = a.id AND canceled_at IS NULL), 0)
            - COALESCE((SELECT SUM(amount_cents) FROM goal_contributions WHERE account_id = a.id), 0)
          )::int AS balance_cents
          FROM accounts a
@@ -166,7 +166,7 @@ export const accountsRepository = {
            - COALESCE((SELECT SUM(amount_cents) FROM expenses WHERE account_id = a.id AND is_paid = true), 0)
            - COALESCE((SELECT SUM(amount_cents) FROM transfers WHERE from_account_id = a.id), 0)
            + COALESCE((SELECT SUM(amount_cents) FROM transfers WHERE to_account_id = a.id), 0)
-           - COALESCE((SELECT SUM(amount_cents) FROM invoice_payments WHERE account_id = a.id), 0)
+           - COALESCE((SELECT SUM(amount_cents) FROM invoice_payments WHERE account_id = a.id AND canceled_at IS NULL), 0)
            - COALESCE((SELECT SUM(amount_cents) FROM goal_contributions WHERE account_id = a.id), 0)
          )::int AS balance_cents
        FROM accounts a
@@ -225,7 +225,7 @@ export const accountsRepository = {
            - COALESCE((SELECT SUM(amount_cents) FROM expenses WHERE account_id = a.id AND expense_date < $3 AND is_paid = true), 0)
            - COALESCE((SELECT SUM(amount_cents) FROM transfers WHERE from_account_id = a.id AND transfer_date < $3), 0)
            + COALESCE((SELECT SUM(amount_cents) FROM transfers WHERE to_account_id = a.id AND transfer_date < $3), 0)
-           - COALESCE((SELECT SUM(amount_cents) FROM invoice_payments WHERE account_id = a.id AND payment_date < $3), 0)
+           - COALESCE((SELECT SUM(amount_cents) FROM invoice_payments WHERE account_id = a.id AND payment_date < $3 AND canceled_at IS NULL), 0)
            - COALESCE((SELECT SUM(amount_cents) FROM goal_contributions WHERE account_id = a.id AND contribution_date < $3), 0)
          )::int AS balance_cents
        FROM accounts a

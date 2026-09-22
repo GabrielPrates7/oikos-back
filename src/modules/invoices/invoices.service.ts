@@ -142,4 +142,46 @@ export const invoicesService = {
       client.release()
     }
   },
+
+  // Soft-cancel (não apaga o registro — ledger model): devolve o valor pra conta de origem (o
+  // saldo nunca é campo mutável, vem do histórico — accounts.getBalance já exclui pagamentos
+  // cancelados, então "devolver" é simplesmente parar de contar o pagamento) e a fatura volta a
+  // 'open' (Aberta/Atrasada, o que computeDisplayStatus já calcular pela data). Sem restrição de
+  // tempo: qualquer pagamento passado é cancelável. Pago em lote cancela cada fatura de forma
+  // independente — não há coluna de lote no esquema, não há nada pra desfazer em conjunto.
+  async cancelPayment(
+    userId: string,
+    invoiceId: string,
+  ): Promise<{ payment: InvoicePayment; invoice: InvoiceWithDisplayStatus }> {
+    const invoice = await invoicesRepository.findByIdAndUser(invoiceId, userId)
+    if (!invoice) {
+      throw new NotFoundError('fatura não encontrada')
+    }
+
+    const client: PoolClient = await pool.connect()
+    try {
+      await client.query('BEGIN')
+
+      // FOR UPDATE trava a linha ATIVA: um segundo cancelamento concorrente do mesmo pagamento
+      // espera esta transação terminar e, ao continuar, não encontra mais nada pra cancelar.
+      const activePayment = await invoicePaymentsRepository.findActiveByInvoiceIdForUpdate(
+        client,
+        invoiceId,
+      )
+      if (!activePayment) {
+        throw new ConflictError('pagamento não encontrado ou já foi cancelado')
+      }
+
+      const canceled = await invoicePaymentsRepository.cancel(client, activePayment.id)
+      const updatedInvoice = await invoicesRepository.revertToOpen(client, invoiceId)
+
+      await client.query('COMMIT')
+      return { payment: canceled, invoice: withDisplayStatus(updatedInvoice) }
+    } catch (error) {
+      await client.query('ROLLBACK')
+      throw error
+    } finally {
+      client.release()
+    }
+  },
 }

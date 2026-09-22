@@ -215,7 +215,7 @@ export const expensesRepository = {
        FROM invoice_payments ip
        JOIN invoices inv ON inv.id = ip.invoice_id
        JOIN credit_cards cc ON cc.id = inv.credit_card_id
-       WHERE cc.user_id = $1${range ? ' AND inv.due_date BETWEEN $2 AND $3' : ''}`,
+       WHERE cc.user_id = $1 AND ip.canceled_at IS NULL${range ? ' AND inv.due_date BETWEEN $2 AND $3' : ''}`,
       dateParams,
     )
 

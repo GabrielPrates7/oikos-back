@@ -55,3 +55,12 @@ export async function pay(request: FastifyRequest, reply: FastifyReply): Promise
   const result = await invoicesService.payInvoice(request.user!.id, id, body)
   reply.send(result)
 }
+
+export async function cancelPayment(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const { id } = idParamsSchema.parse(request.params)
+  const result = await invoicesService.cancelPayment(request.user!.id, id)
+  reply.send(result)
+}

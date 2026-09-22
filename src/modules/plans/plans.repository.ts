@@ -64,7 +64,8 @@ function lancamentoPeriodSql(kind: LancamentoKind, alias: string, s: string, e: 
 function invoicePeriodSql(alias: string, s: string, e: string) {
   return `(${alias}.due_date BETWEEN ${s} AND ${e}
        OR EXISTS (SELECT 1 FROM invoice_payments ipx
-                  WHERE ipx.invoice_id = ${alias}.id AND ipx.payment_date BETWEEN ${s} AND ${e}))`
+                  WHERE ipx.invoice_id = ${alias}.id AND ipx.payment_date BETWEEN ${s} AND ${e}
+                  AND ipx.canceled_at IS NULL))`
 }
 
 const SOURCE_COLUMN: Record<PlanSourceType, string> = {
@@ -153,7 +154,7 @@ const ITEM_SELECT = `
   LEFT JOIN LATERAL (
     SELECT SUM(amount_cents)::int AS total FROM installments WHERE invoice_id = inv.id
   ) t ON true
-  LEFT JOIN invoice_payments ip ON ip.invoice_id = inv.id
+  LEFT JOIN invoice_payments ip ON ip.invoice_id = inv.id AND ip.canceled_at IS NULL
   LEFT JOIN categories c ON c.id = COALESCE(pi.category_id, ie.category_id, ex.category_id)
 `
 
@@ -469,7 +470,7 @@ async function findOwnedSources(
                   ip.payment_date AS settled_date
            FROM invoices i
            JOIN credit_cards cc ON cc.id = i.credit_card_id
-           LEFT JOIN invoice_payments ip ON ip.invoice_id = i.id
+           LEFT JOIN invoice_payments ip ON ip.invoice_id = i.id AND ip.canceled_at IS NULL
            WHERE cc.user_id = $1 AND i.id = ANY($2::uuid[])`,
           [userId, ids.invoice],
         )
@@ -593,7 +594,7 @@ async function listCandidates(
        LEFT JOIN LATERAL (
          SELECT SUM(amount_cents)::int AS total FROM installments WHERE invoice_id = i.id
        ) t ON true
-       LEFT JOIN invoice_payments ip ON ip.invoice_id = i.id`
+       LEFT JOIN invoice_payments ip ON ip.invoice_id = i.id AND ip.canceled_at IS NULL`
     select = `i.id, ('Fatura ' || cc.name) AS description, COALESCE(t.total, 0) AS amount_cents,
        i.due_date AS date, NULL::boolean AS is_planned, (i.status = 'paid') AS settled,
        ip.payment_date AS settled_date, NULL::uuid AS cat_id, NULL::text AS cat_name,
@@ -863,6 +864,7 @@ const MOVEMENTS_CTE = `
     UNION ALL
     SELECT 'invoice', ip.payment_date, -ip.amount_cents::bigint
     FROM invoice_payments ip JOIN acc ON acc.id = ip.account_id
+    WHERE ip.canceled_at IS NULL
     UNION ALL
     SELECT 'goal', gc.contribution_date, -gc.amount_cents::bigint
     FROM goal_contributions gc JOIN acc ON acc.id = gc.account_id

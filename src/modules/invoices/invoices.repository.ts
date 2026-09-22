@@ -213,4 +213,15 @@ export const invoicesRepository = {
     )
     return result.rows[0]
   },
+
+  // Escrita — parte da transação de invoices.service.cancelPayment. Volta ao status bruto
+  // 'open': computeDisplayStatus recalcula sozinho 'overdue'/'closed' comparando due_date/
+  // closing_date com hoje, na próxima leitura — nenhuma lógica de status nova aqui.
+  async revertToOpen(client: PoolClient, invoiceId: string): Promise<Invoice> {
+    const result = await client.query<Invoice>(
+      "UPDATE invoices SET status = 'open' WHERE id = $1 RETURNING *",
+      [invoiceId],
+    )
+    return result.rows[0]
+  },
 }

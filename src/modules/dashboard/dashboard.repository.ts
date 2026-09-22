@@ -135,7 +135,7 @@ export const dashboardRepository = {
        JOIN accounts a ON a.id = ip.account_id
        JOIN invoices inv ON inv.id = ip.invoice_id
        JOIN credit_cards cc ON cc.id = inv.credit_card_id
-       WHERE a.user_id = $1 AND ip.payment_date BETWEEN $2 AND $3
+       WHERE a.user_id = $1 AND ip.payment_date BETWEEN $2 AND $3 AND ip.canceled_at IS NULL
        ORDER BY ip.payment_date DESC, ip.created_at DESC
        LIMIT $4`,
       [userId, monthStart, monthEnd, limit],
