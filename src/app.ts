@@ -13,6 +13,7 @@ import { expensesRoutes } from './modules/expenses/expenses.routes.js'
 import { goalsRoutes } from './modules/goals/goals.routes.js'
 import { incomeEntriesRoutes } from './modules/income-entries/income-entries.routes.js'
 import { invoicesRoutes } from './modules/invoices/invoices.routes.js'
+import { plansRoutes } from './modules/plans/plans.routes.js'
 import { purchasesRoutes } from './modules/purchases/purchases.routes.js'
 import { reportsRoutes } from './modules/reports/reports.routes.js'
 import { transfersRoutes } from './modules/transfers/transfers.routes.js'
@@ -53,6 +54,7 @@ export function buildApp() {
   app.register(usersRoutes, { prefix: '/api/users' })
   app.register(budgetsRoutes, { prefix: '/api/budgets' })
   app.register(goalsRoutes, { prefix: '/api/goals' })
+  app.register(plansRoutes, { prefix: '/api/plans' })
 
   return app
 }
