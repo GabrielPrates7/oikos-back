@@ -3,8 +3,10 @@ import { env } from '../../config/env.js'
 import { loginSchema, registerSchema } from './auth.schema.js'
 import { authService } from './auth.service.js'
 
-const REFRESH_COOKIE_NAME = 'refreshToken'
-const REFRESH_COOKIE_PATH = '/api/auth'
+// Exportados pra users.controller.ts limpar o mesmo cookie ao trocar a senha (mesmo efeito
+// do logout: o front não deve continuar "autenticado" com o refresh token antigo).
+export const REFRESH_COOKIE_NAME = 'refreshToken'
+export const REFRESH_COOKIE_PATH = '/api/auth'
 const REFRESH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
 
 function setRefreshCookie(reply: FastifyReply, token: string): void {
