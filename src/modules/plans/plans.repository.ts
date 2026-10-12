@@ -850,11 +850,11 @@ const MOVEMENTS_CTE = `
     SELECT 'income'::text AS kind, COALESCE(ie.received_date, ie.entry_date) AS d,
            ie.amount_cents::bigint AS signed
     FROM income_entries ie JOIN acc ON acc.id = ie.account_id
-    WHERE ie.is_received
+    WHERE ie.is_received AND ie.count_in_totals = true
     UNION ALL
     SELECT 'expense', COALESCE(e.paid_date, e.expense_date), -e.amount_cents::bigint
     FROM expenses e JOIN acc ON acc.id = e.account_id
-    WHERE e.is_paid
+    WHERE e.is_paid AND e.count_in_totals = true
     UNION ALL
     SELECT 'transfer', t.transfer_date, -t.amount_cents::bigint
     FROM transfers t JOIN acc ON acc.id = t.from_account_id
@@ -869,7 +869,6 @@ const MOVEMENTS_CTE = `
     SELECT 'goal', gc.contribution_date, -gc.amount_cents::bigint
     FROM goal_contributions gc JOIN acc ON acc.id = gc.account_id
   )`
-
 // Saldo TOTAL (contas ativas) com todos os movimentos de data efetiva ANTERIOR a beforeDate. Com uma
 // data no futuro distante devolve o saldo real de hoje (igual à soma de accounts.getBalance).
 async function getTotalBalanceAsOf(
@@ -981,6 +980,7 @@ async function getCategorySpent(
          SELECT e.category_id, e.amount_cents AS amount
          FROM expenses e
          WHERE e.user_id = $1 AND e.expense_date BETWEEN $2 AND $3
+           AND e.count_in_totals = true
          UNION ALL
          SELECT p.category_id, i.amount_cents
          FROM installments i
@@ -1045,7 +1045,7 @@ async function getNotInPlanAlerts(
   const pending = (kind: LancamentoKind) => {
     const { table, settledCol, sourceCol } = LANCAMENTO[kind]
     return `FROM ${table} r
-       WHERE r.user_id = $1 AND NOT r.${settledCol}
+       WHERE r.user_id = $1 AND NOT r.${settledCol} AND r.count_in_totals = true
          AND NOT EXISTS (SELECT 1 FROM plan_items x WHERE x.${sourceCol} = r.id)
          AND ${lancamentoPeriodSql(kind, 'r', '$2', '$3', '$4')}`
   }
@@ -1098,20 +1098,20 @@ async function getPendingBeforeMonth(
     `WITH acc AS (SELECT id FROM accounts WHERE user_id = $1 AND status = 'active')
      SELECT
        (SELECT COALESCE(SUM(ie.amount_cents), 0) FROM income_entries ie JOIN acc ON acc.id = ie.account_id
-         WHERE ie.user_id = $1 AND NOT ie.is_received AND ie.entry_date < $2)::bigint AS income_cents,
+         WHERE ie.user_id = $1 AND NOT ie.is_received AND ie.entry_date < $2 AND ie.count_in_totals = true)::bigint AS income_cents,
        (SELECT COALESCE(SUM(e.amount_cents), 0) FROM expenses e JOIN acc ON acc.id = e.account_id
-         WHERE e.user_id = $1 AND NOT e.is_paid AND e.expense_date < $2)::bigint AS expense_cents,
+         WHERE e.user_id = $1 AND NOT e.is_paid AND e.expense_date < $2 AND e.count_in_totals = true)::bigint AS expense_cents,
        (SELECT COALESCE(SUM(ins.amount_cents), 0)
-          FROM invoices i
-          JOIN credit_cards cc ON cc.id = i.credit_card_id
-          JOIN installments ins ON ins.invoice_id = i.id
-          WHERE cc.user_id = $1 AND i.status <> 'paid' AND i.due_date < $2)::bigint AS invoice_cents,
+         FROM invoices i
+         JOIN credit_cards cc ON cc.id = i.credit_card_id
+         JOIN installments ins ON ins.invoice_id = i.id
+         WHERE cc.user_id = $1 AND i.status <> 'paid' AND i.due_date < $2)::bigint AS invoice_cents,
        ((SELECT COUNT(*) FROM income_entries ie JOIN acc ON acc.id = ie.account_id
-          WHERE ie.user_id = $1 AND NOT ie.is_received AND ie.entry_date < $2)
-        + (SELECT COUNT(*) FROM expenses e JOIN acc ON acc.id = e.account_id
-          WHERE e.user_id = $1 AND NOT e.is_paid AND e.expense_date < $2)
-        + (SELECT COUNT(*) FROM invoices i JOIN credit_cards cc ON cc.id = i.credit_card_id
-          WHERE cc.user_id = $1 AND i.status <> 'paid' AND i.due_date < $2))::bigint AS count`,
+         WHERE ie.user_id = $1 AND NOT ie.is_received AND ie.entry_date < $2 AND ie.count_in_totals = true)
+       + (SELECT COUNT(*) FROM expenses e JOIN acc ON acc.id = e.account_id
+         WHERE e.user_id = $1 AND NOT e.is_paid AND e.expense_date < $2 AND e.count_in_totals = true)
+       + (SELECT COUNT(*) FROM invoices i JOIN credit_cards cc ON cc.id = i.credit_card_id
+         WHERE cc.user_id = $1 AND i.status <> 'paid' AND i.due_date < $2))::bigint AS count`,
     [userId, monthStart],
   )
   const row = result.rows[0]
