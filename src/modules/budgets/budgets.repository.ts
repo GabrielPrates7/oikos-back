@@ -105,6 +105,7 @@ export const budgetsRepository = {
          COALESCE((
            SELECT SUM(amount_cents) FROM expenses
            WHERE user_id = $1 AND category_id = $2 AND expense_date BETWEEN $3 AND $4
+           AND count_in_totals = true
          ), 0)
          + COALESCE((
            SELECT SUM(i.amount_cents)
